@@ -1,0 +1,25 @@
+/* Review pass: geometry and state corrections consume the same foundation. */
+[hidden]{display:none!important}
+html{scrollbar-color:var(--border) transparent;scrollbar-width:thin}
+.nav-group{padding-top:var(--space-16)}
+.sidebar{gap:var(--space-16)}
+.profile-layout{align-items:start}
+.profile-cover{min-height:400px;background:linear-gradient(120deg,var(--surface),var(--background))}
+.profile-cover h1{font-size:clamp(36px,3.2vw,48px);max-width:680px}
+.profile-layout .skin-stage{height:240px}
+.profile-layout .skin-preview{font-size:var(--type-caption);padding:var(--space-16)}
+.profile-layout .skin-preview h3{font-size:20px}
+.hero .eyebrow{color:var(--text);opacity:.9}
+.hero .button:disabled{opacity:.6}
+.hero-topline .status{background:rgba(10,14,20,.85)}
+.card-copy .eyebrow{color:#dae6f7}
+.world-card .button.primary{min-width:140px}
+.detail-aside .profile-actions{flex-direction:column;align-items:start}
+.build-row .build-row-copy .meta{margin-top:var(--space-4)}
+.button.primary:focus-visible{outline-color:var(--text)}
+.hero .button.primary{box-shadow:0 6px 24px rgba(0,0,0,.16)}
+@media(max-width:1366px){.world-card{min-height:280px}.profile-cover{min-height:380px}}
+
+.profile-main{min-width:0;display:flex;flex-direction:column;gap:32px}
+
+*{scrollbar-width:none!important;scrollbar-gutter:auto!important}*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}

@@ -1,0 +1,22 @@
+{
+  "source": "PyPI minecraft-launcher-lib 8.0",
+  "url": "https://files.pythonhosted.org/packages/4d/ff/ac903044f43558af87999dda35e7a3c31d278f766e83e484b24d572fdffe/minecraft_launcher_lib-8.0-py3-none-any.whl",
+  "sha256": "ff17960c62e21ca7e21329303ae56bdefc0246de3bc9a5e1578dfa8df6604746",
+  "bytes": 61631,
+  "read_files": [
+    "minecraft_launcher_lib/__init__.py",
+    "minecraft_launcher_lib/_helper.py",
+    "minecraft_launcher_lib/command.py",
+    "minecraft_launcher_lib/types.py",
+    "minecraft_launcher_lib-8.0.dist-info/licenses/LICENSE"
+  ],
+  "installed": false,
+  "fixture_files": {
+    "command.py": "b674b0d89ab335249911fca40ffcf83997ae2bb62ba6dae5b60fcfc8edc6a1f8",
+    "_helper.py": "af42877acce50af8e3ced7d155774dab70f6084e75884f970dfbd34bf12805c9",
+    "LICENSE": "0543e52fb585af8240782939353f38a626204af396620553809dd78cdfb88c6a"
+  },
+  "execution_policy": "Tests compile only selected reviewed function definitions; package imports/install/network/process entrypoints never run.",
+  "package_imported": false,
+  "selected_function_definitions_execute_in_tests": true
+}

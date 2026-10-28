@@ -1,0 +1,342 @@
+[
+  {
+    "id": "welcome",
+    "course_id": "getting-started",
+    "title": "welcome.title",
+    "description": "welcome.description",
+    "steps": [
+      {
+        "id": "welcome.intro",
+        "type": "INTRO",
+        "title": "welcome.intro.title",
+        "instruction": "welcome.intro.instruction",
+        "target": {
+          "type": "canvas"
+        },
+        "validation": {},
+        "hints": []
+      }
+    ],
+    "version": 1
+  },
+  {
+    "id": "canvas",
+    "course_id": "getting-started",
+    "title": "canvas.title",
+    "description": "canvas.description",
+    "steps": [
+      {
+        "id": "canvas.select",
+        "type": "CLICK",
+        "title": "canvas.select.title",
+        "instruction": "canvas.select.instruction",
+        "target": {
+          "type": "canvas"
+        },
+        "validation": {
+          "kind": "action",
+          "event": "canvas.selected"
+        },
+        "hints": [
+          "canvas.select.hint0"
+        ]
+      }
+    ],
+    "version": 1
+  },
+  {
+    "id": "components",
+    "course_id": "getting-started",
+    "title": "components.title",
+    "description": "components.description",
+    "steps": [
+      {
+        "id": "components.add",
+        "type": "ADD_COMPONENT",
+        "title": "components.add.title",
+        "instruction": "components.add.instruction",
+        "target": {
+          "type": "toolbar-action",
+          "id": "add-component"
+        },
+        "validation": {
+          "kind": "action",
+          "event": "component.created",
+          "matches": {
+            "componentType": "text"
+          }
+        },
+        "hints": [
+          "components.add.hint0",
+          "components.add.hint1"
+        ]
+      }
+    ],
+    "version": 1
+  },
+  {
+    "id": "move",
+    "course_id": "getting-started",
+    "title": "move.title",
+    "description": "move.description",
+    "steps": [
+      {
+        "id": "move.prepare",
+        "type": "ADD_COMPONENT",
+        "title": "move.prepare.title",
+        "instruction": "move.prepare.instruction",
+        "target": {
+          "type": "toolbar-action",
+          "id": "add-component"
+        },
+        "validation": {
+          "kind": "action",
+          "event": "component.created"
+        },
+        "hints": []
+      },
+      {
+        "id": "move.change",
+        "type": "MOVE",
+        "title": "move.change.title",
+        "instruction": "move.change.instruction",
+        "target": {
+          "type": "component",
+          "component_type": "text"
+        },
+        "validation": {
+          "kind": "property",
+          "event": "component.moved",
+          "property": "x",
+          "delta": 2
+        },
+        "hints": [
+          "move.change.hint0",
+          "move.change.hint1"
+        ]
+      }
+    ],
+    "version": 1
+  },
+  {
+    "id": "resize",
+    "course_id": "getting-started",
+    "title": "resize.title",
+    "description": "resize.description",
+    "steps": [
+      {
+        "id": "resize.prepare",
+        "type": "ADD_COMPONENT",
+        "title": "resize.prepare.title",
+        "instruction": "resize.prepare.instruction",
+        "target": {
+          "type": "toolbar-action",
+          "id": "add-component"
+        },
+        "validation": {
+          "kind": "action",
+          "event": "component.created"
+        },
+        "hints": []
+      },
+      {
+        "id": "resize.change",
+        "type": "RESIZE",
+        "title": "resize.change.title",
+        "instruction": "resize.change.instruction",
+        "target": {
+          "type": "inspector-property",
+          "property": "w"
+        },
+        "validation": {
+          "kind": "property",
+          "event": "component.resized",
+          "property": "w",
+          "delta": 5,
+          "direction": "increase"
+        },
+        "hints": [
+          "resize.change.hint0",
+          "resize.change.hint1"
+        ]
+      }
+    ],
+    "version": 1
+  },
+  {
+    "id": "layers",
+    "course_id": "getting-started",
+    "title": "layers.title",
+    "description": "layers.description",
+    "steps": [
+      {
+        "id": "layers.prepare",
+        "type": "ADD_COMPONENT",
+        "title": "layers.prepare.title",
+        "instruction": "layers.prepare.instruction",
+        "target": {
+          "type": "toolbar-action",
+          "id": "add-component"
+        },
+        "validation": {
+          "kind": "action",
+          "event": "component.created"
+        },
+        "hints": []
+      },
+      {
+        "id": "layers.reorder",
+        "type": "REORDER_LAYER",
+        "title": "layers.reorder.title",
+        "instruction": "layers.reorder.instruction",
+        "target": {
+          "type": "toolbar-action",
+          "id": "layers"
+        },
+        "validation": {
+          "kind": "action",
+          "event": "layer.reordered"
+        },
+        "hints": [
+          "layers.reorder.hint0",
+          "layers.reorder.hint1"
+        ]
+      }
+    ],
+    "version": 1
+  },
+  {
+    "id": "first-page",
+    "course_id": "getting-started",
+    "title": "first-page.title",
+    "description": "first-page.description",
+    "steps": [
+      {
+        "id": "first.intro",
+        "type": "INTRO",
+        "title": "first.intro.title",
+        "instruction": "first.intro.instruction",
+        "target": {
+          "type": "canvas"
+        },
+        "validation": {},
+        "hints": []
+      },
+      {
+        "id": "first.add",
+        "type": "ADD_COMPONENT",
+        "title": "first.add.title",
+        "instruction": "first.add.instruction",
+        "target": {
+          "type": "toolbar-action",
+          "id": "add-component"
+        },
+        "validation": {
+          "kind": "action",
+          "event": "component.created",
+          "matches": {
+            "componentType": "text"
+          }
+        },
+        "hints": [
+          "first.add.hint0",
+          "first.add.hint1"
+        ]
+      },
+      {
+        "id": "move.change",
+        "type": "MOVE",
+        "title": "move.change.title",
+        "instruction": "move.change.instruction",
+        "target": {
+          "type": "component",
+          "component_type": "text"
+        },
+        "validation": {
+          "kind": "property",
+          "event": "component.moved",
+          "property": "x",
+          "delta": 2
+        },
+        "hints": [
+          "move.change.hint0",
+          "move.change.hint1"
+        ]
+      },
+      {
+        "id": "resize.change",
+        "type": "RESIZE",
+        "title": "resize.change.title",
+        "instruction": "resize.change.instruction",
+        "target": {
+          "type": "inspector-property",
+          "property": "w"
+        },
+        "validation": {
+          "kind": "property",
+          "event": "component.resized",
+          "property": "w",
+          "delta": 5,
+          "direction": "increase"
+        },
+        "hints": [
+          "resize.change.hint0",
+          "resize.change.hint1"
+        ]
+      },
+      {
+        "id": "first.text",
+        "type": "TYPE",
+        "title": "first.text.title",
+        "instruction": "first.text.instruction",
+        "target": {
+          "type": "inspector-property",
+          "property": "text"
+        },
+        "validation": {
+          "kind": "property",
+          "event": "text.updated",
+          "property": "text",
+          "min_length": 5
+        },
+        "hints": [
+          "first.text.hint0"
+        ]
+      },
+      {
+        "id": "first.layer",
+        "type": "REORDER_LAYER",
+        "title": "first.layer.title",
+        "instruction": "first.layer.instruction",
+        "target": {
+          "type": "toolbar-action",
+          "id": "layers"
+        },
+        "validation": {
+          "kind": "action",
+          "event": "layer.reordered"
+        },
+        "hints": []
+      },
+      {
+        "id": "first.save",
+        "type": "SAVE",
+        "title": "first.save.title",
+        "instruction": "first.save.instruction",
+        "target": {
+          "type": "toolbar-action",
+          "id": "save"
+        },
+        "validation": {
+          "kind": "action",
+          "event": "project.saved"
+        },
+        "hints": []
+      }
+    ],
+    "version": 1,
+    "rewards": [
+      "first_creation"
+    ]
+  }
+]

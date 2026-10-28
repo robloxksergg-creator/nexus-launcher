@@ -1,0 +1,90 @@
+name: Rust core verification
+
+# Deliberate push to this single branch only. Backups to rust/core-transfer and
+# main do not run CI. No deployment, production credentials or release uploads.
+'on':
+  push:
+    branches: [rust/verify-core]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-core:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_TERM_COLOR: never
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYO3_BUILD_EXTENSION_MODULE: '1'
+      PYO3_USE_RAW_DYLIB: '0'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Prepare isolated validation tools
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "CARGO_TARGET_DIR=$env:RUNNER_TEMP\nexus-rust-target" >> $env:GITHUB_ENV
+          "PYO3_PYTHON=$(python -c 'import sys; print(sys.executable)')" >> $env:GITHUB_ENV
+          rustup toolchain install 1.99.1-x86_64-pc-windows-msvc --profile minimal --component rustfmt --component clippy
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m pip install --disable-pip-version-check pytest==9.1.1 cryptography==50.0.1 maturin==1.15.0
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          rustc +1.99.1-x86_64-pc-windows-msvc --version
+          python --version
+      - name: Check Rust formatting and warnings
+        run: |
+          cargo +1.99.1-x86_64-pc-windows-msvc fmt --all -- --check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo +1.99.1-x86_64-pc-windows-msvc clippy --locked -p nexus-python -- -D warnings
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Execute pure Rust tests
+        run: |
+          cargo +1.99.1-x86_64-pc-windows-msvc test --locked -p nexus-core -p nexus-transport
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build native Windows extension
+        run: |
+          cargo +1.99.1-x86_64-pc-windows-msvc build --locked --release -p nexus-python
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $extension = "$env:RUNNER_TEMP\nexus-native-extension"
+          New-Item -ItemType Directory -Path $extension -ErrorAction Stop | Out-Null
+          Copy-Item -LiteralPath "$env:CARGO_TARGET_DIR\release\_nexus_launcher_core.dll" -Destination "$extension\_nexus_launcher_core.pyd" -ErrorAction Stop
+      - name: Require all native capabilities and execute regression tests
+        run: |
+          python -B packaging/verify_rust_core.py --extension-dir "$env:RUNNER_TEMP\nexus-native-extension" --results-dir "$env:RUNNER_TEMP\nexus-verification-results"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build and smoke-test the installable native wheel
+        run: |
+          $env:RUSTUP_TOOLCHAIN = '1.99.1-x86_64-pc-windows-msvc'
+          $pythonLibraries = Join-Path (Split-Path -Path $env:PYO3_PYTHON -Parent) 'libs'
+          if (-not (Test-Path -LiteralPath "$pythonLibraries\python3.lib" -PathType Leaf)) { throw 'Python stable ABI import library is unavailable' }
+          Write-Output "Using existing Python import library: $pythonLibraries\python3.lib"
+          python -m maturin build --release --locked --manifest-path crates/nexus-python/Cargo.toml --interpreter "$env:PYO3_PYTHON" --out "$env:RUNNER_TEMP\nexus-wheels" -- -L "native=$pythonLibraries"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $wheels = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP\nexus-wheels" -Filter '*.whl')
+          if ($wheels.Count -ne 1) { throw 'Expected exactly one native wheel' }
+          python -m pip install --disable-pip-version-check --no-index --no-deps --target "$env:RUNNER_TEMP\nexus-wheel-install" $wheels[0].FullName
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -I -B -c 'import sys,pathlib,hashlib,io,time,zlib; root=pathlib.Path(sys.argv[1]).resolve(); sys.path.insert(0,str(root)); import _nexus_launcher_core as n; assert pathlib.Path(n.__file__).resolve().is_relative_to(root); assert all(getattr(n,k,None)==1 for k in ("CORE_API_VERSION","HTTP_API_VERSION","TRANSACTION_API_VERSION","SAFE_IO_API_VERSION","HANDLE_REPLACE_API_VERSION","COPY_STREAM_API_VERSION","ARCHIVE_API_VERSION","STREAM_IO_API_VERSION","STREAM_HASH_API_VERSION","ZIP_DEFLATE_API_VERSION","ZIP_ENCODE_API_VERSION","ZIP_LIMITS_API_VERSION","LAUNCH_POLICY_API_VERSION","CATALOG_API_VERSION","MINECRAFT_COMMAND_API_VERSION","MINECRAFT_PROFILE_API_VERSION","MINECRAFT_CLASSPATH_API_VERSION","MINECRAFT_RULES_API_VERSION")); assert n.catalog_preflight_json("{\"projects\":[]}")=="{\"projects\":[]}"; p={"executable":"java","user_jvm":[],"metadata_jvm":[],"fallback_jvm":["unused"],"main_class":"Main","game":[],"replacements":[],"game_extras":[],"tail":[],"logging":None}; assert n.minecraft_compose_command(p)==["java","Main"]; assert n.minecraft_rules_evaluate("[]","Windows",[False]*6,lambda:False,lambda _:False); assert n.minecraft_classpath_entries("{\"id\":\"synthetic\",\"libraries\":[]}",[])==[["versions","synthetic","synthetic.jar"]]; assert n.minecraft_inherit_profile("{\"inheritsFrom\":\"base\"}","{\"libraries\":[]}"); assert n.launch_username_valid("Synthetic_User"); assert n.launch_environment_mask(["PATH","JAVA_TOOL_OPTIONS"])==[True,False]; assert n.launch_redact_command(["--accessToken","synthetic"])==["--accessToken","<access-token>"]; v=n.TransferVerifier(hashlib.sha256(b"abc").hexdigest(),3); v.update(b"abc"); assert v.finish()==3; assert n.archive_inventory([2,3],2,3,5)==5; assert n.stream_read_limited(io.BytesIO(b"abc").read,3,30,time.monotonic)==b"abc"; dst=io.BytesIO(); assert n.stream_copy_limited(io.BytesIO(b"abc").read,dst.write,3,None,30,time.monotonic)==3; assert dst.getvalue()==b"abc"; assert n.stream_digest_limited(io.BytesIO(b"abc").read,"sha512",3,30,time.monotonic)==hashlib.sha512(b"abc").hexdigest(); c=zlib.compressobj(wbits=-15); raw=c.compress(b"abc")+c.flush(); d=n.ZipDeflateDecoder(3,len(raw)); assert d.decompress(raw,4096)+d.flush()==b"abc"; d.verify_complete(); e=n.ZipDeflateEncoder(6,limit=16*1024**3); encoded=e.compress(b"abc")+e.flush(); e.verify_complete(3); assert zlib.decompress(encoded,-15)==b"abc"; print("Installed wheel import/capabilities/hash/DEFLATE smoke PASS",n.__file__)' "$env:RUNNER_TEMP\nexus-wheel-install"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Retain private verification output for one day
+        # A private wheel is a test artifact, never a published release.
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-core-verification
+          retention-days: 1
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/nexus-native-extension/_nexus_launcher_core.pyd
+            ${{ runner.temp }}/nexus-verification-results/verification.json
+            ${{ runner.temp }}/nexus-verification-results/tests.xml
+            ${{ runner.temp }}/nexus-wheels/*.whl

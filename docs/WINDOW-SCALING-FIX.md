@@ -1,0 +1,11 @@
+# Window sizing — v29
+
+The supplied seven-second recording shows repeated use of the launcher maximize/restore button on Home, not canvas zoom. Frames extracted locally were inspected; video dimensions are 2540×1014. No media was uploaded.
+
+TitleBar previously replaced normal geometry with a rectangle capped at 85% of the monitor and centered it on every restore. The initial saved rectangle was unrelated to the actual startup geometry. The fix initializes it from the real window and preserves each subsequent user size/position. It clamps only when a rectangle would be outside the current available monitor geometry. A guarded 80ms post-native-transition reconciliation replaces the zero-delay state reset. Existing selected document/canvas state is preserved.
+
+WindowButton now consumes double-click events; those must not bubble into the title bar's maximize-on-double-click handler. Double-clicking free title-bar space retains the original behavior. Tests assert exact restored rectangles over changed sizes, button double-click isolation, keyboard operation and native edge hit regions. This is window sizing, not new web-page zoom or global DPI overrides.
+
+Delayed reconciliation changes size only, preserving any title-bar drag performed during the transition. The Qt test session retains one QApplication until session end; recreating QApplication before WebEngine caused an initial access violation in the test harness, resolved by a session fixture. The accepted real-Windows regression run passed 34 tests; the final chrome-specific check is rerun after size-only reconciliation. Build, lint/type results and portable evidence are recorded below after acceptance.
+
+Final acceptance: 34 regressions passed, followed by 3 final chrome tests including move-during-restore. Ruff passed; configured Pyright returned zero errors. PyInstaller v29 succeeded. Frozen Academy action/persistence smoke passed with no JavaScript errors (D:/nexus2/scaling-audit-v29/frozen-smoke.json). All seven user data files were transferred from v28 with matching SHA256, including both Minecraft instances and Academy progress. Backup: D:/nexus2/backups/v28-data-before-sizing-v29. QA data was archived separately. Production executable: D:/nexus2/deliverables-v29/NEXUS-2.0-Portable-v29/NEXUS-2.0-Portable-v29.exe.

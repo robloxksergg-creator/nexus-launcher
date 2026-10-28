@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "playerRc": {
+    "creatorCloudPublishing": false,
+    "controlCenter": false
+  },
+  "staging": {
+    "creatorCloudPublishing": true,
+    "controlCenter": true
+  }
+}

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'">
+  <title>NEXUS · Главная</title>
+  <link rel="stylesheet" href="/launcher.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" aria-label="Навигация NEXUS">
+    <button class="brand" data-route="home" aria-label="NEXUS — главная"><span class="brand-symbol" aria-hidden="true">◇</span><span class="rail-label">NEXUS<span class="brand-caption">ОТКРОЙ СВОЙ МИР</span></span></button>
+    <nav class="nav" aria-label="Основные разделы">
+      <button data-route="home" title="Главная"><span data-icon="home"></span><span class="rail-label">Главная</span></button>
+      <p class="nav-group rail-label">БИБЛИОТЕКА</p>
+      <button data-route="library" title="Мои сборки"><span data-icon="build"></span><span class="rail-label">Мои сборки</span></button>
+      <button data-route="saved" title="Мои миры"><span data-icon="world"></span><span class="rail-label">Мои миры</span></button>
+      <p class="nav-group rail-label">ОТКРЫВАЙ</p>
+      <button data-route="catalog" title="Каталог миров"><span data-icon="compass"></span><span class="rail-label">Каталог миров</span></button>
+      <button data-action="academy" title="NEXUS Creator Academy"><span data-icon="build"></span><span class="rail-label">Creator Academy</span></button>
+      <p class="nav-group rail-label">МОИ СЕРВЕРЫ</p>
+      <div id="pinned-worlds" class="pinned-worlds"></div>
+      <button data-route="catalog" class="subtle" title="Добавить мир"><span data-icon="plus"></span><span class="rail-label">Добавить мир</span></button>
+    </nav>
+    <div class="sidebar-footer">
+      <button data-route="support" title="Поддержка"><span>?</span><span class="rail-label">Поддержка</span></button>
+      <button data-route="downloads" title="Загрузки"><span data-icon="download"></span><span class="rail-label">Загрузки</span></button>
+      <button data-route="settings" title="Настройки"><span data-icon="settings"></span><span class="rail-label">Настройки</span></button>
+      <button data-route="profile" class="account" title="Профиль"><span class="avatar-mini" aria-hidden="true">◇</span><span class="rail-label"><strong id="account-name">Гость NEXUS</strong><small id="account-caption">Войти в свой мир</small></span></button>
+      <span class="sidebar-credit rail-label">Сделано ForceCore</span>
+    </div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar">
+      <button class="icon-button navigation-toggle" aria-label="Свернуть навигацию" title="Свернуть навигацию" aria-expanded="true"><span data-icon="rail"></span></button>
+      <button class="icon-button" id="history-back" aria-label="Назад" title="Назад"><span data-icon="back"></span></button>
+      <span id="route-name" class="route-name">Главная</span>
+      <span class="topbar-spacer"></span>
+      <button id="game-stop" data-action="stop-game" hidden>Остановить Minecraft</button>
+      <span class="candidate-label">NEXUS 2.0 <span>ЛОКАЛЬНАЯ ВЕРСИЯ</span></span>
+      <button class="icon-button" data-action="fullscreen" aria-label="Полный экран" title="Полный экран"><span data-icon="expand"></span></button>
+    </header>
+    <main class="content" id="content" tabindex="-1" aria-label="Содержимое страницы">
+      <div class="page"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-hero"></div><p class="muted" role="status">Открываем ваши миры…</p></div>
+    </main>
+  </div>
+</div>
+<div id="notification" class="notification" role="status" aria-live="polite" hidden></div>
+<script src="/components.js"></script>
+<script src="/screens.js"></script>
+<script src="/launcher.js"></script>
+</body>
+</html>

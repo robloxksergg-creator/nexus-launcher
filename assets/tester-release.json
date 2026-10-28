@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0-beta.1",
+  "channel": "beta",
+  "api": "https://nexusmc-control-plane-staging.robloxksergg.workers.dev",
+  "status": "private-test-candidate",
+  "trusted_update_keys": {
+    "nexus-beta-updates-20261016": "e78eac8dbdde332f1f1fb09eafef0e427604a958526c1a4ae75575543af79205"
+  }
+}

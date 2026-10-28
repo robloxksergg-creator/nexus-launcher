@@ -1,0 +1,38 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": [
+    "nexus_launcher/nexus_platform",
+    "nexus_launcher/instance_ui.py",
+    "assets/ui2"
+  ],
+  "locale": "ru-RU",
+  "canonicalMap": "../../UX-CONTRACT.md",
+  "requiredCapabilities": [
+    "Scrollbar",
+    "CRUD",
+    "Form",
+    "Select/Listbox"
+  ],
+  "ownership": {
+    "Select/Listbox": "native"
+  },
+  "requiredCommands": [
+    "unit",
+    "lint",
+    "typecheck",
+    "build"
+  ],
+  "commands": {
+    "unit": "python -m pytest -q --basetemp=D:/nx-t2",
+    "lint": "python -m ruff check nexus_launcher tests",
+    "typecheck": "python -m pyright nexus_launcher/nexus_platform",
+    "build": "python -m PyInstaller --noconfirm --clean --distpath D:/nexus2/deliverables-v19 --workpath D:/nexus2/build-portable-v19 packaging/specs/NexusPortable.spec"
+  },
+  "evidence": {
+    "crudFullFlow": "tests/test_user_instances.py",
+    "failurePaths": "tests/test_design_host.py",
+    "geometry": "tests/test_design_host.py",
+    "renderedScreens": "../../../assets/previews",
+    "visualReview": "../../VISUAL-REVIEW.md"
+  }
+}

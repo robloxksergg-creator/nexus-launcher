@@ -1,0 +1,13 @@
+argon2-cffi==25.1.0
+cryptography==50.0.1
+keyring==25.7.0
+minecraft-launcher-lib==8.0
+Pillow==12.3.0
+pyotp==2.10.0
+qrcode==8.2
+zxcvbn==4.5.0
+PySide6==6.8.3
+PyInstaller==6.22.2
+tuf==7.0.1
+securesystemslib==1.5.1
+urllib3==2.8.0

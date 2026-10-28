@@ -1,0 +1,9 @@
+{
+  "main_window_visible": true,
+  "registration_button_visible": true,
+  "registration_initial_submit": true,
+  "registration_code_visible": true,
+  "account_api": "https://nexusmc-site.robloxksergg.workers.dev",
+  "keyring_backend": "keyring.backends.Windows",
+  "network_calls": 0
+}

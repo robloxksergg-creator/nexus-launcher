@@ -1,0 +1,22 @@
+[package]
+name = "nexus-python"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+license-file = "../../LICENSE"
+publish = false
+
+[lib]
+name = "_nexus_launcher_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+sha2.workspace = true
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+nexus-core = { path = "../nexus-core" }
+nexus-transport = { path = "../nexus-transport" }
+pyo3 = { workspace = true, features = ["abi3-py311"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_Threading"] }

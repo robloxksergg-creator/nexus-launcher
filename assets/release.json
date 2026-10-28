@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "channel": "stable",
+  "status": "private-stable-candidate",
+  "minimum_supported_version": "0.9.24",
+  "manual_upgrade_from": "0.9.23",
+  "trusted_update_keys": {
+    "nexus-launcher-updates-2026-01": "d81eb166b53a5707cbec61e1f07c9e5a423f483ee3414dc2f63dc199a609ee66"
+  }
+}

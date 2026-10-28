@@ -1,0 +1,119 @@
+name: Launcher unsigned review candidate
+
+'on':
+  workflow_dispatch:
+  push:
+    branches: [signpath/verify-candidate]
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYO3_BUILD_EXTENSION_MODULE: '1'
+      PYO3_USE_RAW_DYLIB: '0'
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Install pinned build dependencies
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m pip install --disable-pip-version-check -r requirements.txt -r packaging/requirements/requirements-media.txt -r packaging/requirements/requirements-markdown.txt pytest==9.1.1 maturin==1.15.0
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          rustup toolchain install 1.99.1-x86_64-pc-windows-msvc --profile minimal
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "RUSTUP_TOOLCHAIN=1.99.1-x86_64-pc-windows-msvc" >> $env:GITHUB_ENV
+          "CARGO_TARGET_DIR=$env:RUNNER_TEMP\nexus-target" >> $env:GITHUB_ENV
+          "PYO3_PYTHON=$(python -c 'import sys; print(sys.executable)')" >> $env:GITHUB_ENV
+      - name: Build Rust from this checkout
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo test --locked -p nexus-core -p nexus-transport
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $pythonLibraries = python -c "import sys,pathlib; print(pathlib.Path(sys.executable).parent / 'libs')"
+          if (-not (Test-Path -LiteralPath "$pythonLibraries\python3.lib")) { throw 'Python ABI import library missing' }
+          python -m maturin build --locked --release --manifest-path crates/nexus-python/Cargo.toml --out "$env:RUNNER_TEMP\wheels" -- -L "native=$pythonLibraries"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $wheels = @(Get-ChildItem "$env:RUNNER_TEMP\wheels" -Filter '*.whl')
+          if ($wheels.Count -ne 1) { throw 'Expected one wheel from this checkout' }
+          python -m pip install --no-index --no-deps $wheels[0].FullName
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Test packaging and registration contracts without live accounts
+        run: |
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          python -B -m pytest tests/test_candidate_inventory.py tests/test_portable_assets.py tests/test_python_notices.py tests/test_notice_verification.py tests/test_source_notices.py tests/test_locked_rust_notices.py tests/test_notice_assembly.py tests/test_review_repack.py tests/test_ssl_packaging.py tests/test_registration.py tests/test_registration_diagnostics.py tests/test_nexus_account.py -q -p no:cacheprovider
+          exit $LASTEXITCODE
+      - name: Collect installed Python notices and build review candidate
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pythonNotices = "$env:RUNNER_TEMP\python-notices"
+          $env:NEXUS_CANDIDATE_NOTICES = "$env:RUNNER_TEMP\combined-notices"
+          python -B -c "import importlib.metadata as m,runpy,sys; collect=runpy.run_path('packaging/collect_python_notices.py')['collect']; collect(sorted({d.metadata['Name'] for d in m.distributions() if d.metadata['Name']}),sys.argv[1])" $pythonNotices
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo fetch --locked
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE '.cargo' }
+          $rustNotices = "$env:RUNNER_TEMP\rust-notices"
+          python -B packaging/collect_locked_rust_notices.py --lockfile Cargo.lock --cache "$cargoHome\registry\cache" --output $rustNotices
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B -c "import PySide6; from PySide6.QtCore import qVersion; assert PySide6.__version__ == '6.8.3' and qVersion() == '6.8.3'"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $qtArchive = "$env:RUNNER_TEMP\qtwebengine-everywhere-src-6.8.3.tar.xz"
+          Invoke-WebRequest -Uri 'https://download.qt.io/archive/qt/6.8/6.8.3/submodules/qtwebengine-everywhere-src-6.8.3.tar.xz' -OutFile $qtArchive -MaximumRedirection 4 -TimeoutSec 180
+          $qtNotices = "$env:RUNNER_TEMP\qt-source-notices"
+          python -B packaging/collect_source_notices.py --archive $qtArchive --sha256 df4e19ba2b3a540551b6f998d62597377ffa688c1cff564589b7da2e2bf87337 --prefix qtwebengine-everywhere-src-6.8.3 --output $qtNotices
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B packaging/assemble_notice_bundle.py --output $env:NEXUS_CANDIDATE_NOTICES --group "python=$pythonNotices" --group "rust=$rustNotices" --group "qtwebengine-source=$qtNotices"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B -m PyInstaller --noconfirm --distpath "$env:RUNNER_TEMP\candidate" --workpath "$env:RUNNER_TEMP\pyinstaller-work" packaging/specs/NexusSignPathCandidate.spec
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "UNSIGNED REVIEW ONLY. Not approved by SignPath. License, privacy, asset rights and packaged execution review remain required." | Set-Content "$env:RUNNER_TEMP\candidate\UNSIGNED-REVIEW-ONLY.txt"
+          git rev-parse HEAD | Set-Content "$env:RUNNER_TEMP\candidate\SOURCE-COMMIT.txt"
+          Get-FileHash "$env:RUNNER_TEMP\candidate\NEXUS Launcher\NEXUS Launcher.exe" -Algorithm SHA256 | Format-List | Out-File "$env:RUNNER_TEMP\candidate\EXE-SHA256.txt"
+      - name: Execute packaged UI offline
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          $report = "$env:RUNNER_TEMP\candidate\FROZEN-SMOKE.json"
+          $exe = "$env:RUNNER_TEMP\candidate\NEXUS Launcher\NEXUS Launcher.exe"
+          $process = Start-Process -FilePath $exe -ArgumentList @('--self-test-report', $report) -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:RUNNER_TEMP\candidate\smoke-stdout.log" -RedirectStandardError "$env:RUNNER_TEMP\candidate\smoke-stderr.log"
+          if (-not $process.WaitForExit(90000)) {
+            Stop-Process -Id $process.Id
+            throw 'Owned smoke process timed out'
+          }
+          if ($process.ExitCode -ne 0) { throw "Frozen smoke exit $($process.ExitCode)" }
+          $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if (-not $result.loaded -or -not $result.application_icon -or -not $result.window_icon -or @($result.script_errors).Count) { throw 'Frozen UI acceptance failed' }
+          $dom = $result.dom | ConvertFrom-Json
+          if (-not $dom.image -or $dom.buttons -lt 1) { throw 'Frozen renderer assets missing' }
+          # portable_main stores data next to this owned test executable.
+          # Keep the smoke artifacts out of the candidate application payload.
+          $smokeData = "$env:RUNNER_TEMP\candidate\NEXUS Launcher\data"
+          if (Test-Path -LiteralPath $smokeData) {
+            $resolved = [System.IO.Path]::GetFullPath($smokeData)
+            $expected = [System.IO.Path]::GetFullPath("$env:RUNNER_TEMP\candidate\NEXUS Launcher\data")
+            if ($resolved -ne $expected) { throw 'Unexpected smoke data path' }
+            Remove-Item -LiteralPath $resolved -Recurse -Force
+          }
+          python -B packaging/candidate_inventory.py --root "$env:RUNNER_TEMP\candidate\NEXUS Launcher" --output "$env:RUNNER_TEMP\candidate\CANDIDATE-FILES.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unsigned-launcher-review
+          retention-days: 3
+          if-no-files-found: error
+          include-hidden-files: true
+          path: ${{ runner.temp }}/candidate/

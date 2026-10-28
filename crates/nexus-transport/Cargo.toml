@@ -1,0 +1,16 @@
+[package]
+name = "nexus-transport"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+license-file = "../../LICENSE"
+publish = false
+
+[dependencies]
+reqwest.workspace = true
+tokio.workspace = true
+bytes = "1"
+
+[dev-dependencies]
+http = "1"
