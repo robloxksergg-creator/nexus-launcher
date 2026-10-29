@@ -7,7 +7,7 @@ from pathlib import Path
 from contextlib import nullcontext
 
 
-def main():
+def main(*, readiness_callback=None):
     if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
         os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
     storage = os.environ.get("NEXUS_PORTABLE_DATA")
@@ -43,6 +43,9 @@ def main():
         else:
             window = PrototypeHost(services)
         window.showMaximized()
+        if readiness_callback is not None:
+            from nexus_launcher.public_readiness import PublicReadinessProbe
+            window.bootstrap_readiness = PublicReadinessProbe(window, services, readiness_callback)
         if "--self-test-report" in sys.argv:
             window.showNormal()
             window.resize(1366, 900)
@@ -62,7 +65,8 @@ def main():
             def loaded(ok):
                 def capture():
                     def received(value):
-                        report = {"loaded": ok, "dom": value, "profile_off_record": window.profile.isOffTheRecord(), "script_errors": window.page.script_errors,
+                        from nexus_launcher.release_metadata import CURRENT_VERSION
+                        report = {"release_version": CURRENT_VERSION, "loaded": ok, "dom": value, "profile_off_record": window.profile.isOffTheRecord(), "script_errors": window.page.script_errors,
                                   "application_icon": not app.windowIcon().isNull(), "window_icon": not window.windowIcon().isNull(),
                                   "desktop_file_name": app.desktopFileName()}
                         if "--content-smoke" in sys.argv:

@@ -67,7 +67,11 @@ def main():
             dialog.exec()
             return 0
         with lease:
-            transport = PackageTransport(config['feed'], allowed_hosts=hosts) if config['feed'] else None
+            if config['feed'] and config['feed'].startswith('https://github.com/'):
+                from nexus_launcher.github_updates import GitHubPackageTransport
+                transport = GitHubPackageTransport(config['feed'])
+            else:
+                transport = PackageTransport(config['feed'], allowed_hosts=hosts) if config['feed'] else None
             backend = Backend(root, transport=transport, adapter=WindowsProcessAdapter(lease),
                               platform='windows', arch='x64')
             window = StartupUpdateWindow(backend)

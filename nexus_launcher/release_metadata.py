@@ -21,4 +21,11 @@ if build_channel.TESTER_BUILD:
                        for key_id, public in beta_keys.items())):
             raise ValueError('Invalid dedicated beta update trust store')
         METADATA = {**METADATA, 'trusted_update_keys': dict(beta_keys)}
+if build_channel.PUBLIC_PREVIEW_BUILD:
+    if build_channel.TESTER_BUILD or build_channel.STAGING_BUILD:
+        raise ValueError('Public preview cannot use tester or staging identity')
+    from nexus_launcher import public_update_identity as public
+    METADATA = {**METADATA, "version": public.VERSION, "channel": public.CHANNEL,
+                "status": "public-managed-preview",
+                "trusted_update_keys": {public.KEY_ID: public.PUBLIC_KEY}}
 CURRENT_VERSION = METADATA["version"]

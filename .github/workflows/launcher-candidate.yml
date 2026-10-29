@@ -54,7 +54,7 @@ jobs:
       - name: Test packaging and registration contracts without live accounts
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
-          python -B -m pytest tests/test_candidate_inventory.py tests/test_portable_assets.py tests/test_python_notices.py tests/test_notice_verification.py tests/test_source_notices.py tests/test_locked_rust_notices.py tests/test_notice_assembly.py tests/test_review_repack.py tests/test_ssl_packaging.py tests/test_registration.py tests/test_registration_diagnostics.py tests/test_nexus_account.py -q -p no:cacheprovider
+          python -B -m pytest tests/test_public_update_signing.py tests/test_public_variant.py tests/test_public_update_identity.py tests/test_public_readiness.py tests/test_github_updates.py tests/test_startup_portable_backend.py tests/test_portable_transition.py tests/test_bootstrap_installation.py tests/test_candidate_inventory.py tests/test_portable_assets.py tests/test_python_notices.py tests/test_notice_verification.py tests/test_source_notices.py tests/test_locked_rust_notices.py tests/test_notice_assembly.py tests/test_review_repack.py tests/test_ssl_packaging.py tests/test_registration.py tests/test_registration_diagnostics.py tests/test_nexus_account.py -q -p no:cacheprovider
           exit $LASTEXITCODE
       - name: Collect installed Python notices and build review candidate
         run: |
@@ -83,6 +83,28 @@ jobs:
           "UNSIGNED REVIEW ONLY. Not approved by SignPath. License, privacy, asset rights and packaged execution review remain required." | Set-Content "$env:RUNNER_TEMP\candidate\UNSIGNED-REVIEW-ONLY.txt"
           git rev-parse HEAD | Set-Content "$env:RUNNER_TEMP\candidate\SOURCE-COMMIT.txt"
           Get-FileHash "$env:RUNNER_TEMP\candidate\NEXUS Launcher\NEXUS Launcher.exe" -Algorithm SHA256 | Format-List | Out-File "$env:RUNNER_TEMP\candidate\EXE-SHA256.txt"
+      - name: Build separate public managed components without activating a feed
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:NEXUS_CANDIDATE_NOTICES = "$env:RUNNER_TEMP\combined-notices"
+          python -B -m PyInstaller --noconfirm --distpath "$env:RUNNER_TEMP\managed" --workpath "$env:RUNNER_TEMP\managed-work" packaging/specs/NexusManagedPublic.spec
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B -m PyInstaller --noconfirm --distpath "$env:RUNNER_TEMP\managed" --workpath "$env:RUNNER_TEMP\bootstrap-work" packaging/specs/NexusPublicBootstrap.spec
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B packaging/candidate_inventory.py --root "$env:RUNNER_TEMP\managed\NEXUS Managed Launcher" --output "$env:RUNNER_TEMP\managed\MANAGED-FILES.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B packaging/candidate_inventory.py --root "$env:RUNNER_TEMP\managed\NEXUS Public Bootstrap" --output "$env:RUNNER_TEMP\managed\BOOTSTRAP-FILES.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build a second actual release identity for update acceptance
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:NEXUS_CANDIDATE_NOTICES = "$env:RUNNER_TEMP\combined-notices"
+          python -B packaging/prepare_public_variant.py --source . --destination "$env:RUNNER_TEMP\source-v2" --version 1.0.2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B -m PyInstaller --noconfirm --distpath "$env:RUNNER_TEMP\managed-v2" --workpath "$env:RUNNER_TEMP\managed-v2-work" "$env:RUNNER_TEMP\source-v2\packaging\specs\NexusManagedPublic.spec"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B packaging/candidate_inventory.py --root "$env:RUNNER_TEMP\managed-v2\NEXUS Managed Launcher" --output "$env:RUNNER_TEMP\managed-v2\MANAGED-FILES.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Execute packaged UI offline
         run: |
           $ErrorActionPreference = 'Stop'
@@ -117,3 +139,15 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
           path: ${{ runner.temp }}/candidate/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: managed-update-components-review
+          include-hidden-files: true
+          retention-days: 3
+          path: ${{ runner.temp }}/managed/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: managed-update-v2-review
+          include-hidden-files: true
+          retention-days: 3
+          path: ${{ runner.temp }}/managed-v2/
