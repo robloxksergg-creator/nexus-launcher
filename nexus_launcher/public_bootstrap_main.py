@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 
 
-def main():
+def main(*, installation_root=None):
     if os.name != 'nt' or not getattr(sys, 'frozen', False):
         raise RuntimeError('Packaged Windows bootstrap required')
     import nexus_launcher.build_channel as channel
@@ -24,7 +24,8 @@ def main():
 
     resources = Path(sys._MEIPASS)
     # A new directory and trust chain; no automatic copying/deleting old saves.
-    root = Path(os.environ['LOCALAPPDATA']) / 'NEXUS Launcher' / 'managed-preview'
+    root = (Path(installation_root).absolute() if installation_root is not None else
+            Path(os.environ['LOCALAPPDATA']) / 'NEXUS Launcher' / 'managed-preview')
     app = QApplication(sys.argv)
     app.setApplicationName('NEXUS Launcher')
     app.setWindowIcon(QIcon(str(resources / 'assets' / 'icon.ico')))
