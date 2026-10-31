@@ -4,7 +4,7 @@ from datetime import UTC,datetime,timedelta
 from pathlib import Path
 from unittest.mock import patch
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from nexus_launcher.online_installation import install,installed_root,validate_destination
+from nexus_launcher.online_installation import install,installed_root,validate_destination,installation_details
 from nexus_launcher.signed_release import canonical,METADATA
 
 class Transport:
@@ -28,6 +28,14 @@ class OnlineInstallationTests(unittest.TestCase):
   target=self.run_install();self.assertEqual(target.read_bytes(),self.source.read_bytes());self.assertEqual(installed_root(target),self.root);self.assertEqual(self.transport.downloads,1);self.assertEqual(self.events[-1][0],'COMPLETE');self.assertFalse(any((self.root/'cache').iterdir()));slot=json.loads((self.root/'active.json').read_text())['slot'];self.assertTrue((self.root/'slots'/slot/'files/_internal/runtime.dll').is_file())
  def test_retry_does_not_download_or_replace_installed_package(self):
   self.run_install();before=(self.root/'active.json').read_bytes();self.run_install();self.assertEqual(self.transport.downloads,1);self.assertEqual((self.root/'active.json').read_bytes(),before)
+ def test_completion_details_come_from_verified_package(self):
+  target=self.run_install();details=installation_details(target,keys=self.transport.keys)
+  self.assertEqual(details.executable,target);self.assertEqual(details.version,'99.0.0');self.assertEqual(details.file_count,2);self.assertEqual(details.total_bytes,sum(f['size'] for f in self.transport.payload['files']))
+ def test_completion_details_refuse_tampered_package(self):
+  target=self.run_install();slot=json.loads((self.root/'active.json').read_text())['slot'];(self.root/'slots'/slot/'files/_internal/runtime.dll').write_bytes(b'tampered')
+  with self.assertRaises(ValueError):installation_details(target,keys=self.transport.keys)
+ def test_completion_details_refuse_missing_receipt(self):
+  with self.assertRaises(ValueError):installation_details(self.root/'NEXUS.exe',keys=self.transport.keys)
  def test_unrelated_directory_is_preserved(self):
   self.root.mkdir();f=self.root/'user-world.dat';f.write_bytes(b'PRESERVE')
   with self.assertRaises(ValueError):self.run_install()

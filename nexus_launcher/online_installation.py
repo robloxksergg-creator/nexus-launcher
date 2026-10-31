@@ -2,6 +2,7 @@
 import hashlib
 import shutil
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from nexus_launcher.bootstrap_installation import provision_initial
 from nexus_launcher.portable_package import verify_portable_inventory, verify_staged_portable
@@ -12,6 +13,23 @@ from nexus_launcher.signed_release import verify_envelope
 from nexus_launcher.user_instances import atomic_json
 MARKER='online-install.json'
 APPLICATION='NEXUS.exe'
+
+@dataclass(frozen=True)
+class InstallationDetails:
+ executable: Path
+ version: str
+ file_count: int
+ total_bytes: int
+
+def installation_details(executable,*,keys=None):
+ """Show completion only for our receipt and a reverified selected package."""
+ executable=Path(executable).absolute()
+ root=installed_root(executable)
+ if root is None:raise ValueError('INSTALL_RECEIPT_INVALID')
+ pointer=_read(root,'active.json')
+ if not isinstance(pointer,dict) or set(pointer)!={'slot'} or not isinstance(pointer['slot'],str) or not pointer['slot'].startswith('portable-stage-'):raise ValueError('INSTALL_POINTER')
+ inventory=verify_staged_portable(checked_path(root,'slots/'+pointer['slot']),keys=keys,installed=True)
+ return InstallationDetails(executable,inventory.version,len(inventory.files),sum(size for _,size,_ in inventory.files))
 
 def installer_digest(source):
  with Path(source).open('rb') as stream:return hashlib.file_digest(stream,'sha256').hexdigest()

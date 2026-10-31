@@ -1,7 +1,7 @@
 """Shared desktop chrome using the OS move/resize operations, not JS privileges."""
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QPainter, QPen, QIcon
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel
 
 from nexus_launcher.nexus_platform.theme_tokens import TOKENS
@@ -69,6 +69,15 @@ class TitleBar(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        from pathlib import Path
+        import sys
+        resources = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[2]))
+        brand = QLabel(self)
+        brand.setPixmap(QIcon(str(resources / 'assets' / 'nexus-mark.svg')).pixmap(30, 24))
+        brand.setFixedWidth(42)
+        brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        brand.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout.addWidget(brand)
         label = QLabel(window.windowTitle() if dialog else "N E X U S", self)
         if dialog:
             window.windowTitleChanged.connect(label.setText)

@@ -7,7 +7,7 @@ def main():
  if os.name!='nt' or not getattr(sys,'frozen',False):raise RuntimeError('Packaged Windows installer required')
  import nexus_launcher.build_channel as channel
  channel.PUBLIC_PREVIEW_BUILD=True
- from nexus_launcher.online_installation import install,installed_root,validate_destination
+ from nexus_launcher.online_installation import install,installed_root,validate_destination,installation_details
  root=installed_root(Path(sys.executable))
  if root is not None:
   from nexus_launcher.public_bootstrap_main import main as launch
@@ -34,8 +34,10 @@ def main():
     phase=name;self.progress.emit((name,done,total))
    try:
     selected,_=validate_destination(self.directory,sys.executable)
-    with WindowsLaunchLease(selected):target=install(selected,sys.executable,GitHubPackageTransport(FEED,timeout=20),emit)
-    self.finished_install.emit((str(target),None))
+    with WindowsLaunchLease(selected):
+     target=install(selected,sys.executable,GitHubPackageTransport(FEED,timeout=20),emit)
+     details=installation_details(target)
+    self.finished_install.emit((details,None))
    except Exception as error:
     category=transport_failure(error)['category']
     known={'INSTALL_DIRECTORY_NOT_EMPTY':'Выберите пустую папку. Существующие файлы не изменялись.','INSTALL_ALREADY_OWNED':'В папке находится другая установка. Выберите новую пустую папку.','INSTALL_PATH_TOO_LONG':'Выберите более короткий путь установки.','INSTALL_EXECUTABLE_CONFLICT':'В папке уже есть другой NEXUS.exe. Он не заменён.'}
@@ -46,7 +48,7 @@ def main():
     self.finished_install.emit((None,detail))
  class Window(NexusDialog):
   def __init__(self):
-   super().__init__();self.worker=None;self.target=None
+   super().__init__();self.worker=None;self.target=None;self.details=None;self.completion=None;self.shortcut_created=False
    self.setWindowTitle('Установка NEXUS Launcher');self.setMinimumWidth(520);self.setStyleSheet(stylesheet()+f"QDialog {{ background:{TOKENS['background']}; }}")
    box=QVBoxLayout(self);box.setContentsMargins(28,24,28,24);box.setSpacing(16)
    title=QLabel('NEXUS Launcher');title.setStyleSheet('font-size:28px;font-weight:700');box.addWidget(title)
@@ -74,11 +76,44 @@ def main():
    self.bar.setRange(0,100 if total else 0)
    if total:self.bar.setValue(min(99,done*100//total))
   def result(self,result):
-   target,error=result;self.target=Path(target) if target else None;self.status.setText(error or 'Установка завершена. Можно запускать NEXUS.');self.bar.setRange(0,100);self.bar.setValue(100 if target else 0)
+   details,error=result;self.details=details;self.target=details.executable if details else None;self.status.setText(error or 'Установка завершена. Можно запускать NEXUS.');self.bar.setRange(0,100);self.bar.setValue(100 if details else 0)
   def done_worker(self):
    self.worker.deleteLater();self.worker=None;self.title_bar.close_button.setEnabled(True)
    self.go.setVisible(self.target is None);self.go.setEnabled(True);self.choose.setEnabled(self.target is None);self.path.setEnabled(self.target is None)
    self.open.setVisible(self.target is not None);self.launch.setVisible(self.target is not None)
+   if self.target is not None:self.show_completion()
+  def show_completion(self):
+   from nexus_launcher.installer_completion import CompletionWindow
+   self.completion=CompletionWindow(self.details)
+   self.completion.launch_requested.connect(lambda shortcut:self.complete_install(True,shortcut))
+   self.completion.finish_requested.connect(self.complete_install)
+   self.completion.folder_requested.connect(self.open_install_folder)
+   self.completion.licenses_requested.connect(self.licenses.click)
+   self.completion.finished.connect(self.accept)
+   available=app.primaryScreen().availableGeometry()
+   self.completion.resize(min(1040,int(available.width()*.94)),min(800,int(available.height()*.94)))
+   self.completion.show();self.hide()
+  def open_install_folder(self):
+   try:os.startfile(str(self.target.parent))
+   except OSError:self.completion.show_error('Не удалось открыть папку. Скопируйте путь из блока установки.')
+  def complete_install(self,launch,shortcut):
+   if not self.target or not self.completion:return
+   import subprocess
+   self.completion.set_busy(True)
+   phase='VERIFY'
+   try:
+    if installed_root(self.target)!=self.target.parent:raise ValueError('INSTALL_RECEIPT_INVALID')
+    if shortcut and not self.shortcut_created:
+     phase='SHORTCUT'
+     from nexus_launcher.windows_shortcut import create_shortcut,desktop_directory
+     create_shortcut(self.target,desktop_directory());self.shortcut_created=True
+    if launch:
+     phase='LAUNCH'
+     subprocess.Popen([str(self.target)],cwd=str(self.target.parent),close_fds=True)
+    self.completion.accept()
+   except Exception:
+    message={'VERIFY':'Не удалось подтвердить установленный NEXUS. Файлы не запускались.','SHORTCUT':'Не удалось создать ярлык. Снимите флажок, чтобы завершить без него.','LAUNCH':'Не удалось запустить NEXUS. Откройте папку установки и повторите запуск.'}[phase]
+    self.completion.show_error(message);self.completion.set_busy(False)
   def run_launcher(self):
    if not self.target:return
    import subprocess

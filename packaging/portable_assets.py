@@ -20,7 +20,7 @@ def asset_datas(root):
         if path.is_file():
             if path.name in RETIRED_ASSETS:
                 continue
-            if path.suffix.lower() not in {'.png', '.ico', '.icns', '.json'}:
+            if path.suffix.lower() not in {'.png', '.ico', '.icns', '.json', '.svg'}:
                 raise ValueError('Unreviewed root asset type: ' + path.name)
             result.append((str(path), 'assets'))
         elif path.name in RESOURCE_FOLDERS:
