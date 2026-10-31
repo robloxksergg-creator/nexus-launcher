@@ -7,7 +7,8 @@ import unittest
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from PySide6.QtWidgets import QApplication
 from nexus_launcher.installer_completion import CompletionWindow
-import test_online_installation as installation_fixture
+import runpy
+installation_fixture = runpy.run_path(str(Path(__file__).with_name('test_online_installation.py')))
 from nexus_launcher.online_installation import installation_details
 
 
@@ -17,7 +18,7 @@ class CompletionTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def test_real_fixture_details_and_explicit_actions(self):
-        fixture = installation_fixture.OnlineInstallationTests()
+        fixture = installation_fixture['OnlineInstallationTests']()
         fixture.setUp()
         try:
             target = fixture.run_install()
