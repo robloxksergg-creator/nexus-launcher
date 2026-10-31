@@ -16,15 +16,17 @@ def load_identity():
     return module
 
 
-def test_public_identity_has_only_new_public_key_and_keeps_legacy_file(monkeypatch):
+@pytest.mark.parametrize('version', ['1.0.2', '1.0.3'])
+def test_public_identity_has_only_new_public_key_and_keeps_legacy_file(monkeypatch, version):
     path = Path(__file__).parents[1] / 'assets/release.json'
     before = path.read_bytes()
     monkeypatch.setattr(channel, 'PUBLIC_PREVIEW_BUILD', True)
     monkeypatch.setattr(channel, 'TESTER_BUILD', False)
     monkeypatch.setattr(channel, 'STAGING_BUILD', False)
+    monkeypatch.setattr(identity, 'VERSION', version)
     module = load_identity()
     assert module.METADATA['trusted_update_keys'] == {identity.KEY_ID: identity.PUBLIC_KEY}
-    assert module.CURRENT_VERSION == '1.0.1'
+    assert module.CURRENT_VERSION == version
     assert module.METADATA['channel'] == 'stable'
     assert path.read_bytes() == before
     assert identity.KEY_ID not in json.loads(before)['trusted_update_keys']

@@ -33,6 +33,8 @@ class CompletionTests(unittest.TestCase):
                 window.setWindowTitle('Предпросмотр — синтетический тестовый пакет, не реальная установка')
                 window.show()
                 self.app.processEvents()
+                self.assertFalse(window.launch.visibleRegion().isEmpty())
+                self.assertFalse(window.licenses_button.visibleRegion().isEmpty())
                 self.assertTrue(window.grab().save(os.environ['NEXUS_COMPLETION_SCREENSHOT']))
             actions = []
             window.finish_requested.connect(lambda launch, shortcut: actions.append((launch, shortcut)))
