@@ -26,7 +26,7 @@ jobs:
       - name: Install build and Qt system dependencies on disposable runner
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-x11-0 libxcb-cursor0 libegl1 libopengl0 libnss3 libasound2t64 xvfb dbus-x11
+          sudo apt-get install -y libxkbcommon-x11-0 libxcb-cursor0 libegl1 libopengl0 libnss3 libasound2t64 libpulse0 xvfb dbus-x11
           python -m pip install --disable-pip-version-check -r requirements.txt -r packaging/requirements/requirements-media.txt -r packaging/requirements/requirements-markdown.txt pytest==9.1.1 maturin==1.15.0
           rustup toolchain install 1.99.1 --profile minimal
           echo 'RUSTUP_TOOLCHAIN=1.99.1' >> "$GITHUB_ENV"
@@ -37,6 +37,8 @@ jobs:
           python -m maturin build --locked --release --manifest-path crates/nexus-python/Cargo.toml --out "$RUNNER_TEMP/wheels"
           python -m pip install --no-index --no-deps "$RUNNER_TEMP"/wheels/*.whl
       - name: Test Linux entrypoint and shared platform contracts
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
           python -B -m unittest discover -s tests -p test_linux_entrypoint.py -v
           python -B -m pytest tests/test_platform_support.py tests/test_nexus_account.py tests/test_registration.py -q -p no:cacheprovider
@@ -64,6 +66,7 @@ jobs:
       - name: Archive review artifact preserving Unix permissions
         run: |
           cp LICENSE COPYRIGHT.md "$RUNNER_TEMP/dist/NEXUS-Linux-x64/"
+          cp packaging/README-Linux.md "$RUNNER_TEMP/dist/NEXUS-Linux-x64/README-Linux.md"
           tar -C "$RUNNER_TEMP/dist" -czf "$RUNNER_TEMP/NEXUS-Linux-x64-review.tar.gz" NEXUS-Linux-x64
           cd "$RUNNER_TEMP"
           sha256sum NEXUS-Linux-x64-review.tar.gz > SHA256SUMS-Linux.txt
