@@ -1,3 +1,4 @@
+from nexus_launcher.platform_support import open_in_file_manager
 from pathlib import Path
 import os
 import threading
@@ -456,7 +457,7 @@ class StudioPage(QWidget):
     def open_test_log(self):
         if not self.identifier: return
         path = self.service.instances.path_for(self.identifier) / "logs/latest.log"
-        if path.is_file(): os.startfile(str(path))
+        if path.is_file(): open_in_file_manager(Path(path))
         else: self.output.setPlainText("latest.log ещё не создан.")
 
     def files_menu(self):
@@ -469,7 +470,7 @@ class StudioPage(QWidget):
                 try:
                     path = checked_path(self.service.instances.path_for(self.identifier), name)
                     path.mkdir(parents=True, exist_ok=True)
-                    os.startfile(str(path))
+                    open_in_file_manager(Path(path))
                 except Exception as error:
                     self.output.setPlainText(str(error))
             menu.addAction(relative, open_folder)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import threading
+from nexus_launcher.platform_support import open_in_file_manager
 from pathlib import Path
 
 from nexus_launcher.instance_transfer import InstanceTransferService
@@ -750,18 +751,18 @@ class InstancePage(QWidget):
             return
         folder = self.service.path_for(self.current.id) / "mods"
         folder.mkdir(parents=True, exist_ok=True)
-        os.startfile(str(folder))
+        open_in_file_manager(Path(folder))
 
     def _open_instance(self):
         if self.current:
-            os.startfile(str(self.service.path_for(self.current.id)))
+            open_in_file_manager(Path(self.service.path_for(self.current.id)))
 
     def _open_relative(self, relative):
         if not self.current:
             return
         folder = self.service.path_for(self.current.id) / relative
         folder.mkdir(parents=True, exist_ok=True)
-        os.startfile(str(folder))
+        open_in_file_manager(Path(folder))
 
     def _change_path(self):
         if not self.current:
