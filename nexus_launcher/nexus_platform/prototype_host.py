@@ -53,6 +53,7 @@ class AssetServer:
                 "/components.js": (resource("ui2/components.js").read_bytes(), "text/javascript; charset=utf-8"),
                 "/screens.js": (resource("ui2/screens.js").read_bytes(), "text/javascript; charset=utf-8"),
             }
+            self.assets["/nexus-mark.svg"] = (resource("nexus-mark.svg").read_bytes(), "image/svg+xml")
             for name in ("gearmorph-official.png", "minecraft-meadow.png",
                          "minecraft-desert.png", "minecraft-city.png", "minecraft-mountain.png"):
                 self.assets["/" + name] = (resource(name).read_bytes(), "image/png")

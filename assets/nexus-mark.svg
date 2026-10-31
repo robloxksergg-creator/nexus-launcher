@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" fill="none">
+  <defs>
+    <linearGradient id="fold" x1="220" y1="30" x2="390" y2="360" gradientUnits="userSpaceOnUse"><stop stop-color="#72CCFF"/><stop offset=".45" stop-color="#1F77DF"/><stop offset="1" stop-color="#164788"/></linearGradient>
+    <linearGradient id="left" x1="168" y1="34" x2="94" y2="348" gradientUnits="userSpaceOnUse"><stop stop-color="#D0F7FF"/><stop offset=".32" stop-color="#66BBFF"/><stop offset="1" stop-color="#174F9B"/></linearGradient>
+    <linearGradient id="right" x1="530" y1="28" x2="370" y2="352" gradientUnits="userSpaceOnUse"><stop stop-color="#1D4C87"/><stop offset=".55" stop-color="#3A9DF6"/><stop offset="1" stop-color="#BAF1FF"/></linearGradient>
+  </defs>
+  <path d="M185 38H266L425 328Q436 350 454 350H357Q333 350 321 327Z" fill="url(#fold)"/>
+  <path d="M26 350L164 64Q177 38 201 38H266Q275 38 270 49L140 325Q128 350 104 350Z" fill="url(#left)" stroke="#80CFFF" stroke-opacity=".5"/>
+  <path d="M321 337L453 65Q466 38 491 38H574L438 324Q426 350 402 350H333Q315 350 321 337Z" fill="url(#right)" stroke="#9CDBFF" stroke-opacity=".55"/>
+</svg>
