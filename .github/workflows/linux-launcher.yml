@@ -26,7 +26,7 @@ jobs:
       - name: Install build and Qt system dependencies on disposable runner
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-x11-0 libxcb-cursor0 libegl1 libopengl0 libnss3 libasound2t64 libpulse0 xvfb dbus-x11
+          sudo apt-get install -y libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libegl1 libopengl0 libnss3 libasound2t64 libpulse0 xvfb dbus-x11
           python -m pip install --disable-pip-version-check -r requirements.txt -r packaging/requirements/requirements-media.txt -r packaging/requirements/requirements-markdown.txt pytest==9.1.1 maturin==1.15.0
           rustup toolchain install 1.99.1 --profile minimal
           echo 'RUSTUP_TOOLCHAIN=1.99.1' >> "$GITHUB_ENV"
@@ -59,7 +59,8 @@ jobs:
           python -B -m PyInstaller --noconfirm --distpath "$RUNNER_TEMP/dist" --workpath "$RUNNER_TEMP/pyinstaller-work" packaging/specs/NexusLauncherLinux.spec
       - name: Frozen Linux window smoke with Chromium sandbox retained
         env:
-          QT_QPA_PLATFORM: offscreen
+          QT_QPA_PLATFORM: xcb
+          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
         run: |
           mkdir "$RUNNER_TEMP/smoke"
           export XDG_DATA_HOME="$RUNNER_TEMP/smoke/data"
