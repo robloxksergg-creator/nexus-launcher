@@ -118,12 +118,22 @@ class StartupFlow:
             return True
         except LaunchUncertain:
             self._blocked()
-        except Exception:
+        except Exception as error:
             if may_have_started:
                 self._blocked()
             else:
+                detail = "Повторите проверку или запустите установленную версию, если она доступна."
+                if self.view.phase == Phase.VERIFYING:
+                    # Public categories only, never backend paths or exception text.
+                    if isinstance(error, OSError):
+                        detail = "Не удалось прочитать или записать файлы обновления. Код: VERIFY_IO."
+                    elif isinstance(error, ValueError):
+                        detail = "Пакет не прошёл проверку. Код: VERIFY_REJECTED."
+                    else:
+                        detail = "Не удалось завершить проверку пакета. Код: VERIFY_FAILED."
+                    detail += " Установленную версию можно запустить, если она прошла проверку."
                 self._show(Phase.ERROR, "Не удалось подготовить запуск",
-                           "Повторите проверку или запустите установленную версию, если она доступна.",
+                           detail,
                            retry=True, offline=self._offline_available())
         finally:
             self._busy = False
