@@ -1,0 +1,65 @@
+name: Branded installer and signed update acceptance
+'on':
+  push:
+    branches: [branding/verify-acceptance]
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Install existing pinned acceptance dependencies
+        run: |
+          python -m pip install --disable-pip-version-check PySide6==6.8.3 cryptography==50.0.1
+          exit $LASTEXITCODE
+      - name: Download and hash exact public signed fixtures
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory "$env:RUNNER_TEMP\branding-inputs"
+          $base = 'https://github.com/robloxksergg-creator/nexus-launcher/releases/download/'
+          $items = @(
+            @('v1.0.2-preview.1/NEXUS-Managed-1.0.2-Windows-x64.zip','old.zip','68c60f40a3ebc653f5d80b9bd7e1fb5f51eab291a3980d42b7187a2921e6f790'),
+            @('v1.0.3-preview.1/previous-1.0.2-envelope.json','old.json','829008bb41af04f9ffd2e94d55ac10c9d79d8ee27ff05f85f862c47c2260ff46'),
+            @('v1.0.3-preview.1/NEXUS-Managed-1.0.3-Windows-x64.zip','new.zip','dd91b7f951e98489d781122accd206e4cbb958d198b04e08b46d0f8da913e38a'),
+            @('v1.0.3-preview.1/portable-envelope.json','new.json','4b81e8439696b90ffcd11067161e5b5aecc451a2fa1de4b75a9ca2fd8659b8df'),
+            @('installer-v1.0.0-preview.2/NEXUS-Setup.exe','NEXUS-Setup.exe','32be7d7243326e92e5be79fbc88acf045705caffc4f72a96ba33a172e4844d2d')
+          )
+          foreach ($item in $items) {
+            $path = Join-Path "$env:RUNNER_TEMP\branding-inputs" $item[1]
+            Invoke-WebRequest ($base + $item[0]) -OutFile $path
+            if ((Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $item[2]) { throw "Input hash mismatch: $($item[1])" }
+          }
+      - name: Real native update 1.0.2 to 1.0.3 with signed local inputs
+        run: |
+          $p = "$env:RUNNER_TEMP\branding-inputs"
+          python -B packaging/verify_managed_windows.py --initial-zip "$p\old.zip" --initial-envelope "$p\old.json" --update-zip "$p\new.zip" --update-envelope "$p\new.json" --root "$env:RUNNER_TEMP\nexus-update-acceptance" --report "$p\NATIVE-UPDATE.json"
+          exit $LASTEXITCODE
+      - name: Full package provisioning and actual completion screen
+        run: |
+          $p = "$env:RUNNER_TEMP\branding-inputs"
+          python -B packaging/verify_branded_installation.py --archive "$p\new.zip" --envelope "$p\new.json" --installer "$p\NEXUS-Setup.exe" --root "$env:RUNNER_TEMP\nexus-install-acceptance" --report "$p\FULL-INSTALL.json" --screenshot "$p\completion-1.0.3.png"
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: nexus-branded-native-acceptance
+          retention-days: 5
+          path: |
+            ${{ runner.temp }}/branding-inputs/*.json
+            ${{ runner.temp }}/branding-inputs/*.png
+            ${{ runner.temp }}/nexus-update-acceptance/acceptance-*.json
+            ${{ runner.temp }}/nexus-update-acceptance/acceptance-*.png
