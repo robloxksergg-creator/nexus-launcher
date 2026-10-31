@@ -17,6 +17,7 @@ def main():
  from PySide6.QtWidgets import QApplication,QFileDialog,QLabel,QLineEdit,QPushButton,QProgressBar,QVBoxLayout,QHBoxLayout
  from nexus_launcher.themed_dialog import NexusDialog
  from nexus_launcher.nexus_platform.presentation_style import stylesheet
+ from nexus_launcher.nexus_platform.theme_tokens import TOKENS
  from nexus_launcher.github_updates import GitHubPackageTransport
  from nexus_launcher.public_update_identity import FEED
  from nexus_launcher.windows_bootstrap_process import WindowsLaunchLease
@@ -46,7 +47,7 @@ def main():
  class Window(NexusDialog):
   def __init__(self):
    super().__init__();self.worker=None;self.target=None
-   self.setWindowTitle('Установка NEXUS Launcher');self.setMinimumWidth(520);self.setStyleSheet(stylesheet())
+   self.setWindowTitle('Установка NEXUS Launcher');self.setMinimumWidth(520);self.setStyleSheet(stylesheet()+f"QDialog {{ background:{TOKENS['background']}; }}")
    box=QVBoxLayout(self);box.setContentsMargins(28,24,28,24);box.setSpacing(16)
    title=QLabel('NEXUS Launcher');title.setStyleSheet('font-size:28px;font-weight:700');box.addWidget(title)
    info=QLabel('Выберите папку. Установщик скачает полный лаунчер с GitHub, проверит подпись и файлы. Права администратора не требуются.');info.setWordWrap(True);box.addWidget(info)
@@ -95,9 +96,17 @@ def main():
  app=QApplication(sys.argv);app.setApplicationName('NEXUS Setup');app.setWindowIcon(QIcon(str(Path(sys._MEIPASS)/'assets/icon.ico')))
  window=Window();window.show()
  if '--self-test-report' in sys.argv:
-  report=Path(sys.argv[sys.argv.index('--self-test-report')+1]);report.write_text(json.dumps({'schema':1,'window_visible':window.isVisible(),'download_started':window.worker is not None,'elevation_requested':False}),encoding='utf-8');QTimer.singleShot(50,app.quit)
+  report=Path(sys.argv[sys.argv.index('--self-test-report')+1]);window.grab().save(str(report.with_suffix('.png')));
+  with report.open('x',encoding='utf-8') as stream:json.dump({'schema':1,'window_visible':window.isVisible(),'download_started':window.worker is not None,'elevation_requested':False},stream)
+  QTimer.singleShot(50,app.quit)
  return app.exec()
 
 if __name__=='__main__':
  try:sys.exit(main())
- except Exception:sys.exit(1)
+ except Exception:
+  from PySide6.QtWidgets import QApplication,QLabel,QPushButton,QVBoxLayout
+  from nexus_launcher.themed_dialog import NexusDialog
+  from nexus_launcher.nexus_platform.presentation_style import stylesheet
+  from nexus_launcher.nexus_platform.theme_tokens import TOKENS
+  app=QApplication.instance() or QApplication([]);dialog=NexusDialog();dialog.setWindowTitle('NEXUS — запуск недоступен');dialog.setStyleSheet(stylesheet()+f"QDialog {{ background:{TOKENS['background']}; }}")
+  box=QVBoxLayout(dialog);message=QLabel('Не удалось подтвердить установку. Закройте запущенный NEXUS и проверьте целостность папки установки. Защита Windows не отключалась.');message.setWordWrap(True);box.addWidget(message);close=QPushButton('Закрыть');close.clicked.connect(dialog.accept);box.addWidget(close);dialog.exec();sys.exit(1)
