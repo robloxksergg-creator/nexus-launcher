@@ -40,6 +40,8 @@ jobs:
           python -B -m PyInstaller --noconfirm --distpath "$env:RUNNER_TEMP\installer" --workpath "$env:RUNNER_TEMP\installer-work" packaging/specs/NexusOnlineInstaller.spec
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Verify the frozen installer opens without downloading or elevating
+        env:
+          QT_QPA_PLATFORM: windows
         run: |
           $ErrorActionPreference = 'Stop'
           $exe = "$env:RUNNER_TEMP\installer\NEXUS-Setup.exe"
