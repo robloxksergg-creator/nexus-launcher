@@ -46,6 +46,26 @@ def make(**kwargs):
     return StartupFlow(backend, views.append), backend, views
 
 
+@pytest.mark.parametrize("error,code", [
+    (PermissionError("private/path token=secret"), "VERIFY_IO"),
+    (ValueError("private/path token=secret"), "VERIFY_REJECTED"),
+    (RuntimeError("private/path token=secret"), "VERIFY_FAILED"),
+])
+def test_verification_failure_has_safe_category_and_never_activates(error, code):
+    flow, backend, _ = make()
+
+    def refuse(archive, release):
+        raise error
+
+    backend.stage = refuse
+    assert not flow.run()
+    assert flow.view.phase == Phase.ERROR
+    assert code in flow.view.detail
+    assert "private" not in flow.view.detail and "secret" not in flow.view.detail
+    assert flow.view.retry and flow.view.offline
+    assert "activate" not in backend.calls and "launch" not in backend.calls
+
+
 def test_update_waits_for_authenticated_ready_before_success():
     flow, backend, views = make()
     assert flow.run() is True
