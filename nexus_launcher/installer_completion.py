@@ -2,11 +2,11 @@
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import Qt, QRectF, QByteArray, Signal
-from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QIcon
+from PySide6.QtCore import Qt, QRectF, QByteArray, Signal, QPointF
+from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QIcon, QPen, QPolygonF
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QCheckBox, QFrame, QHBoxLayout, QLabel, QPushButton,
-                              QScrollArea, QVBoxLayout, QWidget)
+                              QScrollArea, QVBoxLayout, QWidget, QStyle, QStyleOptionButton)
 from nexus_launcher.themed_dialog import NexusDialog
 from nexus_launcher.nexus_platform.presentation_style import stylesheet
 from nexus_launcher.online_installation import InstallationDetails
@@ -48,6 +48,20 @@ class Backdrop(QWidget):
         p.end()
 
 
+class TickBox(QCheckBox):
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self.isChecked():
+            option = QStyleOptionButton()
+            self.initStyleOption(option)
+            rect = self.style().subElementRect(QStyle.SubElement.SE_CheckBoxIndicator, option, self)
+            p = QPainter(self)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            p.setPen(QPen(QColor('#09243b'), 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            p.drawPolyline(QPolygonF([QPointF(rect.left()+5, rect.center().y()), QPointF(rect.left()+9, rect.bottom()-5), QPointF(rect.right()-4, rect.top()+5)]))
+            p.end()
+
+
 class CompletionWindow(NexusDialog):
     launch_requested = Signal(bool)
     finish_requested = Signal(bool, bool)
@@ -83,13 +97,13 @@ class CompletionWindow(NexusDialog):
         scroll.setWidgetResizable(True)
         surface = Backdrop()
         content = QVBoxLayout(surface)
-        content.setContentsMargins(48, 30, 48, 24)
-        content.setSpacing(18)
+        content.setContentsMargins(40, 24, 40, 20)
+        content.setSpacing(12)
         content.addStretch()
         check = QLabel('✓')
         check.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        check.setFixedSize(84, 84)
-        check.setStyleSheet('color:#8cdaff;font-size:60px;background:#152d47;border:2px solid #74bbeb;border-radius:23px;')
+        check.setFixedSize(70, 70)
+        check.setStyleSheet('color:#8cdaff;font-size:50px;background:#152d47;border:2px solid #74bbeb;border-radius:20px;')
         content.addWidget(check, 0, Qt.AlignmentFlag.AlignHCenter)
         title = QLabel('Установка завершена!')
         title.setObjectName('completeTitle')
@@ -104,20 +118,22 @@ class CompletionWindow(NexusDialog):
         summary = QFrame()
         summary.setObjectName('installSummary')
         box = QVBoxLayout(summary)
-        box.setContentsMargins(24, 20, 24, 20)
-        box.setSpacing(12)
+        box.setContentsMargins(20, 16, 20, 16)
+        box.setSpacing(8)
         caption = QLabel('Папка установки')
         caption.setObjectName('summaryCaption')
-        box.addWidget(caption)
+        caption_row = QHBoxLayout()
+        caption_row.addWidget(caption)
+        open_folder = QPushButton('Открыть папку ↗')
+        open_folder.clicked.connect(self.folder_requested)
+        caption_row.addWidget(open_folder)
+        box.addLayout(caption_row)
         self.location = QLabel(str(details.executable.parent))
         self.location.setTextFormat(Qt.TextFormat.PlainText)
         self.location.setObjectName('summaryValue')
         self.location.setWordWrap(True)
         self.location.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         box.addWidget(self.location)
-        open_folder = QPushButton('Открыть папку ↗')
-        open_folder.clicked.connect(self.folder_requested)
-        box.addWidget(open_folder, 0, Qt.AlignmentFlag.AlignLeft)
         self.version = QLabel('Версия  ' + details.version)
         self.version.setObjectName('summaryValue')
         box.addWidget(self.version)
@@ -129,34 +145,54 @@ class CompletionWindow(NexusDialog):
         size.setObjectName('summaryValue')
         box.addWidget(size)
         content.addWidget(summary)
-        self.launch_check = QCheckBox('Запустить NEXUS Launcher после завершения')
+        actions_panel = QWidget()
+        actions_panel.setObjectName('completeActions')
+        actions_panel.setStyleSheet('QWidget#completeActions {background:#0d1b2b;}')
+        actions = QVBoxLayout(actions_panel)
+        actions.setContentsMargins(40, 14, 40, 16)
+        actions.setSpacing(10)
+        self.launch_check = TickBox('Запустить NEXUS Launcher после завершения')
         self.launch_check.setChecked(True)
-        self.shortcut_check = QCheckBox('Создать ярлык на рабочем столе')
-        content.addWidget(self.launch_check)
-        content.addWidget(self.shortcut_check)
+        self.shortcut_check = TickBox('Создать ярлык на рабочем столе')
+        actions.addWidget(self.launch_check)
+        actions.addWidget(self.shortcut_check)
         self.error = QLabel('')
         self.error.setWordWrap(True)
         self.error.setStyleSheet('color:#ffb6be;')
         self.error.hide()
-        content.addWidget(self.error)
+        actions.addWidget(self.error)
         self.launch = QPushButton('▶  Запустить NEXUS')
         self.launch.setObjectName('completeLaunch')
         self.launch.clicked.connect(lambda: self.launch_requested.emit(self.shortcut_check.isChecked()))
         self.done_button = QPushButton('Готово')
         self.done_button.setObjectName('completeDone')
         self.done_button.clicked.connect(lambda: self.finish_requested.emit(self.launch_check.isChecked(), self.shortcut_check.isChecked()))
-        content.addWidget(self.launch)
-        content.addWidget(self.done_button)
+        for button in (self.launch, self.done_button):
+            button.setMaximumWidth(560)
+            row = QHBoxLayout()
+            row.addStretch(1)
+            row.addWidget(button, 10)
+            row.addStretch(1)
+            actions.addLayout(row)
         content.addStretch()
         footer = QLabel('NEXUS Launcher  ·  ForceCore Production  ·  GPL-3.0-only')
         footer.setWordWrap(True)
         footer.setStyleSheet('color:#a7bbd1;font-size:12px;')
-        content.addWidget(footer)
+        footer_row = QHBoxLayout()
+        footer_row.addWidget(footer, 1)
         licenses = QPushButton('Лицензии компонентов ↗')
         licenses.clicked.connect(self.licenses_requested)
-        content.addWidget(licenses, 0, Qt.AlignmentFlag.AlignRight)
+        footer_row.addWidget(licenses)
+        actions.addLayout(footer_row)
+        self.licenses_button = licenses
         scroll.setWidget(surface)
-        outer.addWidget(scroll)
+        outer.addWidget(scroll, 1)
+        outer.addWidget(actions_panel)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if hasattr(self, 'title_bar'):
+            self.title_bar.minimize.show()
 
     def show_error(self, text):
         self.error.setText(text)
