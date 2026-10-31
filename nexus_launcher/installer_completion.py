@@ -142,11 +142,11 @@ class CompletionWindow(NexusDialog):
         self.launch = QPushButton('▶  Запустить NEXUS')
         self.launch.setObjectName('completeLaunch')
         self.launch.clicked.connect(lambda: self.launch_requested.emit(self.shortcut_check.isChecked()))
-        self.done = QPushButton('Готово')
-        self.done.setObjectName('completeDone')
-        self.done.clicked.connect(lambda: self.finish_requested.emit(self.launch_check.isChecked(), self.shortcut_check.isChecked()))
+        self.done_button = QPushButton('Готово')
+        self.done_button.setObjectName('completeDone')
+        self.done_button.clicked.connect(lambda: self.finish_requested.emit(self.launch_check.isChecked(), self.shortcut_check.isChecked()))
         content.addWidget(self.launch)
-        content.addWidget(self.done)
+        content.addWidget(self.done_button)
         content.addStretch()
         footer = QLabel('NEXUS Launcher  ·  ForceCore Production  ·  GPL-3.0-only')
         footer.setWordWrap(True)
@@ -164,6 +164,6 @@ class CompletionWindow(NexusDialog):
 
     def set_busy(self, busy):
         self.launch.setEnabled(not busy)
-        self.done.setEnabled(not busy)
+        self.done_button.setEnabled(not busy)
         self.shortcut_check.setEnabled(not busy)
         self.launch_check.setEnabled(not busy)

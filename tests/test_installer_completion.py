@@ -38,7 +38,7 @@ class CompletionTests(unittest.TestCase):
             window.finish_requested.connect(lambda launch, shortcut: actions.append((launch, shortcut)))
             window.launch_check.setChecked(False)
             window.shortcut_check.setChecked(True)
-            window.done.click()
+            window.done_button.click()
             self.assertEqual(actions, [(False, True)])
             window.set_busy(True)
             self.assertFalse(window.launch.isEnabled())
