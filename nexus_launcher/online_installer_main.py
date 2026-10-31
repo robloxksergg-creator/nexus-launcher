@@ -53,7 +53,7 @@ def main():
    info=QLabel('Выберите папку. Установщик скачает полный лаунчер с GitHub, проверит подпись и файлы. Права администратора не требуются.');info.setWordWrap(True);box.addWidget(info)
    box.addWidget(QLabel('Папка установки и данных сборок'))
    row=QHBoxLayout();self.path=QLineEdit(str(Path(os.environ['LOCALAPPDATA'])/'Programs'/'NEXUS Launcher'));self.path.setAccessibleName('Папка установки');self.choose=QPushButton('Выбрать…');self.choose.clicked.connect(self.browse);row.addWidget(self.path);row.addWidget(self.choose);box.addLayout(row)
-   note=QLabel('Старые сборки не переносятся автоматически. Место на диске будет проверено перед загрузкой. EXE пока без подписи Windows: Smart App Control может запретить запуск.');note.setWordWrap(True);box.addWidget(note)
+   note=QLabel('Старые сборки не переносятся автоматически. Место на диске будет проверено перед загрузкой. EXE пока без подписи Windows: Smart App Control может запретить запуск.');note.setWordWrap(True);note.setMinimumHeight(72);box.addWidget(note)
    self.status=QLabel('Готово к установке');self.status.setWordWrap(True);box.addWidget(self.status)
    self.bar=QProgressBar();self.bar.setRange(0,100);self.bar.setValue(0);box.addWidget(self.bar)
    self.go=QPushButton('Скачать и установить');self.go.setObjectName('primaryAction');self.go.clicked.connect(self.start);box.addWidget(self.go)
