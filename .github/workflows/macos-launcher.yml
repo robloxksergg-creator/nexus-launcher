@@ -52,6 +52,8 @@ jobs:
           curl --fail --location --max-time 180 'https://download.qt.io/archive/qt/6.8/6.8.3/submodules/qtwebengine-everywhere-src-6.8.3.tar.xz' --output "$RUNNER_TEMP/qt-source.tar.xz"
           python -B packaging/collect_source_notices.py --archive "$RUNNER_TEMP/qt-source.tar.xz" --sha256 df4e19ba2b3a540551b6f998d62597377ffa688c1cff564589b7da2e2bf87337 --prefix qtwebengine-everywhere-src-6.8.3 --output "$RUNNER_TEMP/qt-notices"
           python -B packaging/assemble_notice_bundle.py --output "$RUNNER_TEMP/notices" --group "python=$RUNNER_TEMP/python-notices" --group "rust=$RUNNER_TEMP/rust-notices" --group "qtwebengine-source=$RUNNER_TEMP/qt-notices"
+      - name: Render approved brand icons
+        run: python -B packaging/build_brand_icons.py
       - name: Build macOS application bundle
         env:
           NEXUS_CANDIDATE_NOTICES: ${{ runner.temp }}/notices
