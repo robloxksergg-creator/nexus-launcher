@@ -88,7 +88,7 @@ def main():
     check('const z=d.querySelectorAll("input[type=range]")[1];z.value=10;z.dispatchEvent(new Event("input"));return {case:"zoom geometry",pass:parseFloat(getComputedStyle(d.querySelector(".skin-front")).width)===80};')
     check('const a=d.querySelector("input[value=slim]");a.checked=true;a.dispatchEvent(new Event("change"));return {case:"slim arm",pass:parseFloat(getComputedStyle(d.querySelectorAll(".skin-part")[4].querySelector("canvas")).width)===30};')
     check('const t=d.querySelectorAll("input[type=range]")[0];t.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));return {case:"keyboard rotation",pass:Math.abs(Number(t.value)+20)<0.1};')
-    check('document.querySelector("#after").contentWindow.NexusSkin.setProfile({png:null,model:"classic"});return {case:"neutral model",pass:d.querySelectorAll(".skin-part").length===6&&d.querySelector("[role=status]").textContent.includes("РЎРєРёРЅ РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚")};')
+    check('document.querySelector("#after").contentWindow.NexusSkin.setProfile({png:null,model:"classic"});return {case:"neutral model",pass:d.querySelectorAll(".skin-part").length===6&&d.querySelector("[role=status]").textContent.includes("Скин отсутствует")};')
     view.resize(390, 790)
     js('document.querySelector("#before").parentElement.style.display="none";true')
     QTest.qWait(300)

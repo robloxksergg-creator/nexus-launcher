@@ -125,7 +125,7 @@ def test_renderer_dispatches_only_fixed_service_commands(monkeypatch, tmp_path):
           showProfileSpace('overview');
           const card=document.querySelector('.skin-preview');
           const colored=card.querySelector('canvas').getContext('2d').getImageData(2,2,1,1).data[0]===238;
-          const slim=card.querySelector('[role=status]').textContent.includes('РўРѕРЅРєРёРµ');
+          const slim=card.querySelector('[role=status]').textContent.includes('Тонкие');
           const rotate=card.querySelector('input');rotate.value=90;rotate.dispatchEvent(new Event('input'));
           const rotation=card.querySelector('.skin-model').style.transform.includes('90deg');
           rotate.value=180;rotate.dispatchEvent(new Event('input'));
@@ -151,7 +151,7 @@ def test_renderer_dispatches_only_fixed_service_commands(monkeypatch, tmp_path):
         host._sync_skin(force=True)
         QTest.qWait(50)
         grey_result = []
-        host.page.runJavaScript("document.querySelector('.skin-preview [role=status]').textContent.includes('СЃРµСЂР°СЏ')", grey_result.append)
+        host.page.runJavaScript("document.querySelector('.skin-preview [role=status]').textContent.includes('серая')", grey_result.append)
         for _ in range(100):
             QTest.qWait(10)
             if grey_result:
@@ -187,17 +187,17 @@ def test_renderer_dispatches_only_fixed_service_commands(monkeypatch, tmp_path):
           const viewer=!NexusProjectAccess.canEdit()&&editButton.hidden;
           document.querySelector('#server-layout-settings').click();
           const deniedClosed=!document.querySelector('.server-layout-dialog').open;
-          const entry={id:'layout-test',name:'Local draft',version:'1.21.1',loader:'Fabric',mods:[],purpose:'Р”Р»СЏ СЃРµР±СЏ'};
+          const entry={id:'layout-test',name:'Local draft',version:'1.21.1',loader:'Fabric',mods:[],purpose:'Для себя'};
           packLibrary.push(entry);projectContexts.set(entry.id,newPackPresentation(entry));activateProject(entry.id);
           const open=document.querySelector('#server-layout-settings');open.click();
           const dialog=document.querySelector('.server-layout-dialog');const opened=dialog.open;
           const ads=document.querySelector('#zone-setting-ads');ads.checked=false;ads.dispatchEvent(new Event('input'));
-          Array.from(dialog.querySelectorAll('button')).find(b=>b.textContent==='РџСЂРёРјРµРЅРёС‚СЊ').click();
+          Array.from(dialog.querySelectorAll('button')).find(b=>b.textContent==='Применить').click();
           const saved=!document.querySelector('.server-ad-zone').offsetHeight;
           open.click();const retained=!document.querySelector('#zone-setting-ads').checked;
           document.querySelector('#zone-setting-mainColor').value='#334455';
           document.querySelector('#zone-setting-mainColor').dispatchEvent(new Event('input'));
-          Array.from(dialog.querySelectorAll('button')).find(b=>b.textContent==='РћС‚РјРµРЅР°').click();
+          Array.from(dialog.querySelectorAll('button')).find(b=>b.textContent==='Отмена').click();
           const cancelled=backgroundSaved.desktopLayout.mainColor==='#10151e';
           const stored=projectContexts.get(activeProject).settings.desktopLayout.ads===false;
           openPackPage(entry);
@@ -219,7 +219,7 @@ def test_renderer_dispatches_only_fixed_service_commands(monkeypatch, tmp_path):
         polish_result = []
         host.page.runJavaScript("""JSON.stringify((()=>{
           worldView='discover';showWorldsSpace();
-          const noViewButton=![...worldsSpace.querySelectorAll('button')].some(b=>b.textContent==='РџРѕСЃРјРѕС‚СЂРµС‚СЊ');
+          const noViewButton=![...worldsSpace.querySelectorAll('button')].some(b=>b.textContent==='Посмотреть');
           const semantic=!!worldsSpace.querySelector('button.world-card-open[aria-label]');
           worldsSpace.querySelector('.block-actions button').click();
           const independent=!worldsSpace.hidden&&overview.hidden;
@@ -261,7 +261,7 @@ def test_renderer_dispatches_only_fixed_service_commands(monkeypatch, tmp_path):
             const transfer=new DataTransfer();transfer.items.add(new File([bytes],'test.webm',{type:'video/webm'}));input.files=transfer.files;
             await input.onchange();
             const decoded=!!dialog.querySelector('video.banner-media-preview');
-            [...dialog.querySelectorAll('button')].find(button=>button.textContent==='РџСЂРёРјРµРЅРёС‚СЊ').click();
+            [...dialog.querySelectorAll('button')].find(button=>button.textContent==='Применить').click();
             const applied=backgroundSaved.desktopLayout.banner?.kind==='video';
             const video=previewBoard.querySelector('.banner-video');
             const controls=!!video&&video.muted&&video.loop&&!!previewBoard.querySelector('.banner-pause')&&!!previewBoard.querySelector('.banner-fullscreen');
@@ -270,8 +270,8 @@ def test_renderer_dispatches_only_fixed_service_commands(monkeypatch, tmp_path):
             const bad=document.querySelector('#creator-banner-file'),broken=new DataTransfer();
             broken.items.add(new File([new Uint8Array([1,2,3])],'broken.webm',{type:'video/webm'}));bad.files=broken.files;
             await bad.onchange();
-            const rejected=[...dialog.querySelectorAll('[role=status]')].some(node=>node.textContent.includes('РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ'));
-            [...dialog.querySelectorAll('button')].find(button=>button.textContent==='РћС‚РјРµРЅР°').click();
+            const rejected=[...dialog.querySelectorAll('[role=status]')].some(node=>node.textContent.includes('Не удалось открыть'));
+            [...dialog.querySelectorAll('button')].find(button=>button.textContent==='Отмена').click();
             const cancelled=backgroundSaved.desktopLayout.banner.url===saved;
             NexusDiscovery.openServer(false);window.bannerTestResult={decoded,applied,controls,rejected,cancelled};
           }catch(error){window.bannerTestResult={error:String(error)};}
@@ -309,7 +309,7 @@ def test_renderer_dispatches_only_fixed_service_commands(monkeypatch, tmp_path):
           entry.click();const dialog=document.querySelector('.desktop-auth-choice');
           const open=dialog.open;const options=dialog.querySelectorAll('[data-auth-command]').length;
           const footer=!!entry.closest('.sidebar');
-          const duplicates=Array.from(document.querySelectorAll('.topbar button')).some(b=>['Р’РѕР№С‚Рё','Р РµРіРёСЃС‚СЂР°С†РёСЏ'].includes(b.textContent));
+          const duplicates=Array.from(document.querySelectorAll('.topbar button')).some(b=>['Войти','Регистрация'].includes(b.textContent));
           dialog.close();return {open,options,footer,duplicates};
         })())""", auth_result.append)
         for _ in range(100):
@@ -363,7 +363,7 @@ def test_renderer_dispatches_only_fixed_service_commands(monkeypatch, tmp_path):
                 const visible=!home.hidden;
                 const overflow=document.documentElement.scrollWidth>innerWidth+1;
                 home.querySelectorAll('.discover-playlist button')[1].click();
-                const selected=home.querySelector('.discover-caption h2').textContent==='РўРµС…РЅРѕР»РѕРіРёРё Рё СЌРєСЃРїРµРґРёС†РёРё';
+                const selected=home.querySelector('.discover-caption h2').textContent==='Технологии и экспедиции';
                 NexusDiscovery.openServer(false);
                 return {visible,overflow,selected};
             })())""", home_geometry.append)
