@@ -41,9 +41,9 @@ class TrialReviewDialog(NexusDialog):
         details.setReadOnly(True)
         details.setPlainText(
             f'Исходная сборка: {plan.source_root}\n\n'
-            f'Новая копия: {plan.trial_name}\nID: {plan.trial_id}\n\n'
+            f'Новая копия: {plan.trial_name}\nПапка: {plan.target_root}\n\n'
             f'Изменение только в копии:\nmods/{plan.filename} → disabled_mods/{plan.filename}\n\n'
-            f'Копировать: {len(plan.files)} файлов · {plan.total_bytes/(1024*1024):.1f} МБ\n\n'
+            f'Файлов: {len(plan.files)} · Объём: {plan.total_bytes:,} байт ({plan.total_bytes/(1024*1024):.1f} МиБ)\n\n'
             'Копируются игровые моды, настройки и сохранения. Кэш, логи и архивы резервных копий не переносятся. '
             'Исходные файлы не изменяются. Игра не запускается. Зависимые моды могут перестать работать; это пробное изменение, не подтверждённое исправление.\n\n'
             'Закройте Minecraft, включая запущенные отдельно от NEXUS окна. Блокировка охватывает только этот лаунчер. '
@@ -245,6 +245,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
 
     def copy_created(self, result):
         self.trial_result = result
+        self.prepare_trial.hide()
         self.status.setText('Копия создана: ' + result.trial_name + '. Выбранный мод отключён только в ней. Игра не запускалась; исправление ещё не подтверждено.')
         self.open_trial.show()
         self.open_original.show()

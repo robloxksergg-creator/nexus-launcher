@@ -47,6 +47,7 @@ class TrialPlan:
     files: tuple[tuple[str, int, str], ...]
     trial_id: str
     trial_name: str
+    target_root: str
 
     @property
     def total_bytes(self):
@@ -138,7 +139,7 @@ class DiagnosticTrials:
                 if len(names) != len(files):
                     raise TrialError('Имена файлов различаются только регистром.')
                 trial_id = str(uuid.uuid4())
-                return TrialPlan(self.source_id, str(root), manifest, filename, files, trial_id, original.name[:40]+' — диагностика')
+                return TrialPlan(self.source_id, str(root), manifest, filename, files, trial_id, original.name[:40]+' — диагностика', str(checked_path(self.instances.root, trial_id)))
 
     def apply(self, plan: TrialPlan, cancelled=lambda: False):
         if plan.source_id != self.source_id or str(uuid.UUID(plan.trial_id)) != plan.trial_id:
@@ -160,6 +161,8 @@ class DiagnosticTrials:
                 ensure_space(self.instances.root, plan.total_bytes + 4*1024*1024)
                 stage_parent = checked_path(self.instances.root, '.diagnostic-staging')
                 target = checked_path(self.instances.root, plan.trial_id)
+                if str(target) != plan.target_root:
+                    raise TrialError('Папка назначения отличается от показанного плана.')
                 if target.exists():
                     raise TrialError('Папка новой копии уже занята.')
                 with pinned_directory(stage_parent, create=True):

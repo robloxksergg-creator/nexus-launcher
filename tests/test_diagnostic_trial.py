@@ -1,5 +1,6 @@
 """Owned temporary files only. No game, external account or launch."""
 from contextlib import nullcontext
+from dataclasses import replace
 import hashlib
 import os
 from pathlib import Path
@@ -126,6 +127,12 @@ class TrialTests(unittest.TestCase):
             return walk(path, **kwargs)
         with patch('nexus_launcher.diagnostic_trial.os.walk',side_effect=denied):
             with self.assertRaises(PermissionError):self.trials.prepare('a.jar')
+
+    def test_destination_must_match_confirmation(self):
+        plan=self.trials.prepare('a.jar')
+        self.assertEqual(plan.target_root,str(self.service.path_for(plan.trial_id)))
+        with self.assertRaises(TrialError):self.trials.apply(replace(plan,target_root=str(self.root)))
+        self.assertFalse(self.service.path_for(plan.trial_id).exists())
 
 
 if __name__=='__main__':

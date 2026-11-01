@@ -111,7 +111,7 @@ class TrialUITests(unittest.TestCase):
             def review(dialog):
                 captured.append(dialog.trials)
                 return 0
-            with patch.object(InstanceDiagnosticsDialog,'exec',autospec=True,side_effect=review):
+            with patch.object(InstanceDiagnosticsDialog,'exec',new=review):
                 page._open_diagnostics()
             self.assertEqual(len(captured),1)
             with captured[0].idle_guard():
