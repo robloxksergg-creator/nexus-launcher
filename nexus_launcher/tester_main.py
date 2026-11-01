@@ -105,8 +105,8 @@ def main(*, offline_policy=None, readiness_callback=None):
         def _restore_account_worker(self):
             pass  # AuthState owns startup restore before revealing the launcher.
 
-        def _login_account_worker(self, identifier, password):
-            self.auth.run("login", identifier, password)
+        def _login_account_worker(self, identifier, password, totp_code="", recovery_code=""):
+            self.auth.run("login", identifier, password, totp_code=totp_code, recovery_code=recovery_code)
 
         def _logout_account(self):
             self.auth.run("logout")
@@ -194,8 +194,9 @@ def main(*, offline_policy=None, readiness_callback=None):
             dialog.password.setFocus()
         if dialog.exec():
             identifier, password = dialog.credentials()
+            totp_code, recovery_code = dialog.second_factor()
             dialog.password.clear()
-            auth.run("login", identifier, password)
+            auth.run("login", identifier, password, totp_code=totp_code, recovery_code=recovery_code)
         else:
             dialog.password.clear()
 

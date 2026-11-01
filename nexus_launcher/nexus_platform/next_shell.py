@@ -49,9 +49,9 @@ class NexusLogin(LoginDialog):
     """Existing credentials contract with bounded, labeled NEXUS form controls."""
     def __init__(self, parent):
         super().__init__(parent)
-        self.setMinimumSize(460, 420)
+        self.setMinimumSize(460, 500)
         self.setMaximumSize(16777215, 16777215)
-        self.resize(480, 440)
+        self.resize(480, 520)
         root = self.layout()
         for field, caption in ((self.identifier, "Ник или электронная почта"), (self.password, "Пароль")):
             label = QLabel(caption)
@@ -366,6 +366,7 @@ class NexusLauncher(PlatformLauncher):
             dialog.password.clear()
             return
         identifier, password = dialog.credentials()
+        totp_code, recovery_code = dialog.second_factor()
         dialog.password.clear()
         if not identifier or not password:
             QMessageBox.warning(self, "NEXUS Launcher", "Введите ник или почту и пароль.")
@@ -373,7 +374,7 @@ class NexusLauncher(PlatformLauncher):
         self.profile.setEnabled(False)
         self.profile.setText("Вход…")
         self.profile_page.sync()
-        threading.Thread(target=self._login_account_worker, args=(identifier, password), daemon=True).start()
+        threading.Thread(target=self._login_account_worker, args=(identifier, password, totp_code, recovery_code), daemon=True).start()
 
     def _account_failed(self, message):
         super()._account_failed(message)

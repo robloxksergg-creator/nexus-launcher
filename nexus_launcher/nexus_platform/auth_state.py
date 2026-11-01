@@ -18,7 +18,7 @@ class AuthState(QObject):
         self.busy = False
         self.completed.connect(self._complete, Qt.ConnectionType.QueuedConnection)
 
-    def run(self, operation, *args):
+    def run(self, operation, *args, **kwargs):
         if self.busy:
             return
         self.busy = True
@@ -30,7 +30,7 @@ class AuthState(QObject):
 
         def work():
             try:
-                user = getattr(self.client, operation)(*args)
+                user = getattr(self.client, operation)(*args, **kwargs)
                 self.completed.emit(operation, user, "")
             except SessionRejected:
                 self.completed.emit(operation, None, "AUTH_REJECTED" if operation == "login" else "SESSION_EXPIRED")
@@ -38,8 +38,8 @@ class AuthState(QObject):
                 self.completed.emit(operation, None, "OFFLINE")
             except TransportError:
                 self.completed.emit(operation, None, "SERVER_UNAVAILABLE")
-            except AccountError:
-                self.completed.emit(operation, None, "AUTH_REJECTED")
+            except AccountError as error:
+                self.completed.emit(operation, None, "MFA_REQUIRED" if error.code == "MFA_REQUIRED" else "AUTH_REJECTED")
             except Exception:
                 self.completed.emit(operation, None, "SERVER_UNAVAILABLE")
         threading.Thread(target=work, daemon=True).start()
@@ -53,6 +53,7 @@ class AuthState(QObject):
             "OFFLINE": "Нет подключения к NEXUS. Проверьте сеть и повторите подключение.",
             "SESSION_EXPIRED": "Сессия NEXUS истекла. Войдите снова.",
             "SERVER_UNAVAILABLE": "Не удалось подключиться к NEXUS. Проверьте подключение и повторите.",
+            "MFA_REQUIRED": "Для входа нужен код аутентификатора или неиспользованный резервный код 2FA.",
             "AUTH_REJECTED": "Вход отклонён. Проверьте логин и пароль или восстановите доступ к аккаунту.",
         }
         self.message = messages.get(error, "Войдите или создайте аккаунт NEXUS.")

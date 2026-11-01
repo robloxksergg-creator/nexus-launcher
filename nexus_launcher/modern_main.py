@@ -156,7 +156,8 @@ class LoginDialog(NexusDialog):
     def __init__(self, parent):
         super().__init__(parent)
         self.setWindowTitle("Вход в NEXUS")
-        self.setFixedSize(460, 360)
+        self.setMinimumSize(460, 490)
+        self.resize(480, 510)
         self.setObjectName("settingsDialog")
         root = QVBoxLayout(self)
         root.setContentsMargins(30, 26, 30, 26)
@@ -178,6 +179,16 @@ class LoginDialog(NexusDialog):
         self.password.setPlaceholderText("Пароль")
         self.password.returnPressed.connect(self.accept)
         root.addWidget(self.password)
+        self.mfa_code = QLineEdit()
+        self.mfa_code.setPlaceholderText("Код 2FA, если защита включена")
+        self.mfa_code.setAccessibleName("Код второго фактора")
+        self.mfa_code.setMaxLength(35)
+        self.mfa_code.setEchoMode(QLineEdit.Password)
+        self.mfa_code.returnPressed.connect(self.accept)
+        root.addWidget(self.mfa_code)
+        self.mfa_recovery = QCheckBox("Использовать резервный код")
+        self.mfa_recovery.toggled.connect(lambda checked: self.mfa_code.clear())
+        root.addWidget(self.mfa_recovery)
         self.error = QLabel("")
         self.error.setStyleSheet("color:#f87171;")
         self.error.setWordWrap(True)
@@ -193,6 +204,11 @@ class LoginDialog(NexusDialog):
         buttons.addWidget(cancel)
         buttons.addWidget(login)
         root.addLayout(buttons)
+
+    def second_factor(self):
+        value = self.mfa_code.text().strip()
+        self.mfa_code.clear()
+        return ('', value) if self.mfa_recovery.isChecked() else (value, '')
 
     def credentials(self):
         return self.identifier.text().strip(), self.password.text()
@@ -1650,16 +1666,18 @@ class Launcher(QMainWindow):
         if not dialog.exec():
             return
         identifier, password = dialog.credentials()
+        totp_code, recovery_code = dialog.second_factor()
+        dialog.password.clear()
         if not identifier or not password:
             QMessageBox.warning(self, "NEXUS Launcher", "Введите ник или почту и пароль.")
             return
         self.profile.setEnabled(False)
         self.profile.setText("◆  Вход…")
-        threading.Thread(target=self._login_account_worker, args=(identifier, password), daemon=True).start()
+        threading.Thread(target=self._login_account_worker, args=(identifier, password, totp_code, recovery_code), daemon=True).start()
 
-    def _login_account_worker(self, identifier, password):
+    def _login_account_worker(self, identifier, password, totp_code='', recovery_code=''):
         try:
-            self.bridge.account_ready.emit(self.account_client.login(identifier, password))
+            self.bridge.account_ready.emit(self.account_client.login(identifier, password, totp_code=totp_code, recovery_code=recovery_code))
         except AccountError as error:
             self.bridge.account_failed.emit(str(error))
 

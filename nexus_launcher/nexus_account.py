@@ -171,8 +171,12 @@ class NexusAccountClient:
                 else AccountError
             )
             fields = error_body if isinstance(locals().get("error_body"), dict) else {}
+            mfa_required = (path == '/api/launcher/auth/login' and error.code == 401
+                            and fields.get('twoFactorRequired') is True)
+            if mfa_required:
+                error_type = AccountError
             raise error_type(message or "Сервер аккаунтов отклонил запрос.",
-                             code=fields.get("code"), setup_url=fields.get("setupUrl"),
+                             code="MFA_REQUIRED" if mfa_required else fields.get("code"), setup_url=fields.get("setupUrl"),
                              http_status=http_status, outcome=outcome) from error
         except (urllib.error.URLError, TimeoutError, OSError) as error:
             outcome = "network_error"
@@ -199,7 +203,18 @@ class NexusAccountClient:
     def _response_headers(self, path, result, headers):
         pass
 
-    def login(self, identifier: str, password: str) -> NexusProfile:
+    def login(self, identifier: str, password: str, *, totp_code: str = '', recovery_code: str = '') -> NexusProfile:
+        if totp_code and recovery_code:
+            raise AccountError('Укажите один второй фактор: код приложения или резервный код.')
+        factor = {}
+        if totp_code:
+            if not isinstance(totp_code, str) or not re.fullmatch(r'[0-9]{6}', totp_code):
+                raise AccountError('Код аутентификатора должен содержать шесть цифр.')
+            factor['totpCode'] = totp_code
+        if recovery_code:
+            if not isinstance(recovery_code, str) or not re.fullmatch(r'(?:[a-fA-F0-9]{32}|[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{8}){3})', recovery_code):
+                raise AccountError('Проверьте резервный код 2FA.')
+            factor['recoveryCode'] = recovery_code
         result, _ = self._request(
             "/api/launcher/auth/login",
             method="POST",
@@ -207,6 +222,7 @@ class NexusAccountClient:
                 "identifier": identifier,
                 "password": password,
                 "deviceId": self._device_id(),
+                **factor,
             },
         )
         token = result.get("token")
