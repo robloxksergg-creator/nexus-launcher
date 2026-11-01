@@ -1,0 +1,39 @@
+name: Skin renderer pixel quality verification
+'on':
+  push:
+    branches: [skin/verify-renderer]
+permissions:
+  contents: read
+jobs:
+  renderer:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      QT_QPA_PLATFORM: windows
+      QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
+      QT_SCALE_FACTOR: '2'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check PySide6==6.8.3
+      - name: Capture released baseline and exercise current renderer
+        run: |
+          python -B -c "import subprocess,pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(subprocess.check_output(['git','show','bbe4168b75e7f7d57f7d6f0a2d7bce56d4867a10:assets/approved-ui/skin-preview.js']))" "$env:RUNNER_TEMP\skin-before.js"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B packaging/verify_skin_rendering.py --baseline-js "$env:RUNNER_TEMP\skin-before.js" --output "$env:RUNNER_TEMP\skin-review"
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: skin-renderer-review
+          retention-days: 5
+          path: ${{ runner.temp }}/skin-review/

@@ -17,5 +17,5 @@
 .skin-face{position:absolute;image-rendering:pixelated;backface-visibility:hidden;}
 .profile-avatar-placeholder.skin-avatar{background:transparent;perspective:500px;overflow:visible;}
 .profile-avatar-placeholder.skin-avatar:before,.profile-avatar-placeholder.skin-avatar:after{display:none;}
-.skin-avatar .skin-model{top:50%;transform:rotateX(-12deg) rotateY(-25deg) scale3d(7,7,7) translateY(12px);}
+.skin-avatar .skin-model{top:50%;--skin-unit:7;transform:rotateX(-12deg) rotateY(-25deg) translateY(84px);}
 @media(max-width:750px){.profile-summary:has(.skin-preview){display:block;}.skin-stage{height:280px;}}

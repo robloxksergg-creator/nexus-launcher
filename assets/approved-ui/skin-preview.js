@@ -4,16 +4,20 @@
   const pose={yaw:-25,zoom:8};
   const wrapped=angle=>((angle+180)%360+360)%360-180;
   const viewers=new Set();
+  // Keep geometry at its displayed size. Enlarging an 8 CSS-pixel composited
+  // canvas with an ancestor scale3d blurs it even with a larger backing store.
+  const px=value=>`calc(${value}px * var(--skin-unit, 8))`;
   function cuboid(parent,x,y,z,w,h,d,uv,overlay=false){
     const part=document.createElement('div');part.className='skin-part';
-    part.style.transform=`translate3d(${x}px,${y}px,${z}px)`;
-    const faces=[['front',w,h,`translateZ(${d/2}px)`,uv[0]],['back',w,h,`rotateY(180deg) translateZ(${d/2}px)`,uv[1]],['left',d,h,`rotateY(-90deg) translateZ(${w/2}px)`,uv[2]],['right',d,h,`rotateY(90deg) translateZ(${w/2}px)`,uv[3]],['top',w,d,`rotateX(90deg) translateZ(${h/2}px)`,uv[4]],['bottom',w,d,`rotateX(-90deg) translateZ(${h/2}px)`,uv[5]]];
+    part.style.transform=`translate3d(${px(x)},${px(y)},${px(z)})`;
+    const faces=[['front',w,h,`translateZ(${px(d/2)})`,uv[0]],['back',w,h,`rotateY(180deg) translateZ(${px(d/2)})`,uv[1]],['left',d,h,`rotateY(-90deg) translateZ(${px(w/2)})`,uv[2]],['right',d,h,`rotateY(90deg) translateZ(${px(w/2)})`,uv[3]],['top',w,d,`rotateX(90deg) translateZ(${px(h/2)})`,uv[4]],['bottom',w,d,`rotateX(-90deg) translateZ(${px(h/2)})`,uv[5]]];
     faces.forEach(([name,fw,fh,transform,crop])=>{
       const face=document.createElement('canvas');face.className='skin-face skin-'+name;
-      // Pre-rasterize texels: 3D compositor filtering of an 8px canvas blurs edges.
-      const density=16;
-      face.width=Math.ceil(fw*density);face.height=Math.ceil(fh*density);face.style.width=fw+'px';face.style.height=fh+'px';
-      face.style.left=-fw/2+'px';face.style.top=-fh/2+'px';face.style.transform=transform;
+      // Covers the bounded 5–10 zoom range at up to 2x display density. Texels
+      // are still copied with nearest-neighbour sampling, never interpolated.
+      const density=20;
+      face.width=Math.ceil(fw*density);face.height=Math.ceil(fh*density);face.style.width=px(fw);face.style.height=px(fh);
+      face.style.left=px(-fw/2);face.style.top=px(-fh/2);face.style.transform=transform;
       const ctx=face.getContext('2d');ctx.scale(density,density);ctx.imageSmoothingEnabled=false;
       if(!overlay){ctx.fillStyle={front:'#aaa',back:'#777',left:'#888',right:'#999',top:'#ccc',bottom:'#666'}[name];ctx.fillRect(0,0,fw,fh);}
       if(texture&&crop)ctx.drawImage(texture,...crop,0,0,fw,fh);
@@ -49,7 +53,7 @@
     const status=document.createElement('p');status.setAttribute('role','status');
     const turn=document.createElement('input');turn.type='range';turn.min=-180;turn.max=180;turn.value=wrapped(pose.yaw);turn.setAttribute('aria-label','Поворот персонажа');
     const zoom=document.createElement('input');zoom.type='range';zoom.min=5;zoom.max=10;zoom.value=pose.zoom;zoom.setAttribute('aria-label','Масштаб персонажа');
-    const update=()=>{turn.value=wrapped(pose.yaw);turn.setAttribute('aria-valuetext',Math.round(wrapped(pose.yaw))+' градусов');model.style.transform=`rotateX(-8deg) rotateY(${pose.yaw}deg) scale3d(${pose.zoom},${pose.zoom},${pose.zoom})`;};
+    const update=()=>{turn.value=wrapped(pose.yaw);turn.setAttribute('aria-valuetext',Math.round(wrapped(pose.yaw))+' градусов');model.style.setProperty('--skin-unit',pose.zoom);model.style.transform=`rotateX(-8deg) rotateY(${pose.yaw}deg)`;};
     turn.oninput=()=>{pose.yaw=+turn.value;update();};zoom.oninput=()=>{pose.zoom=+zoom.value;update();};update();
     turn.onkeydown=e=>{
       const step={ArrowLeft:-5,ArrowDown:-5,ArrowRight:5,ArrowUp:5,PageDown:-45,PageUp:45}[e.key];
