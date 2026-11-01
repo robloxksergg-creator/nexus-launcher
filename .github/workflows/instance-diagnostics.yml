@@ -1,7 +1,7 @@
 name: Instance diagnostics read-only verification
 'on':
   push:
-    branches: [diagnostics/verify-center]
+    branches: [diagnostics/verify-center, diagnostics/verify-trial]
 permissions:
   contents: read
 jobs:
@@ -33,9 +33,23 @@ jobs:
         run: |
           python -B -m unittest discover -s tests -p test_instance_diagnostics_ui.py -v
           exit $LASTEXITCODE
+      - name: Trial copy integrity, stale plan, cleanup and launch exclusion
+        run: |
+          python -B -m unittest discover -s tests -p test_diagnostic_trial.py -v
+          exit $LASTEXITCODE
+      - name: Explicit trial confirmation and return to original
+        env:
+          NEXUS_TRIAL_REVIEW_SCREENSHOT: ${{ runner.temp }}/trial-confirmation.png
+          NEXUS_TRIAL_RESULT_SCREENSHOT: ${{ runner.temp }}/trial-result.png
+        run: |
+          python -B -m unittest discover -s tests -p test_diagnostic_trial_ui.py -v
+          exit $LASTEXITCODE
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: instance-diagnostics-review
           retention-days: 5
-          path: ${{ runner.temp }}/instance-diagnostics.png
+          path: |
+            ${{ runner.temp }}/instance-diagnostics.png
+            ${{ runner.temp }}/trial-confirmation.png
+            ${{ runner.temp }}/trial-result.png

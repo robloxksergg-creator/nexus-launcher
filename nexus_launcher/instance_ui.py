@@ -761,8 +761,14 @@ class InstancePage(QWidget):
         if self.current is None:
             return
         from nexus_launcher.nexus_platform.instance_diagnostics_dialog import InstanceDiagnosticsDialog
-        dialog = InstanceDiagnosticsDialog(self.service.path_for(self.current.id), self.current.loader, self.current.name, self)
+        from nexus_launcher.diagnostic_trial import DiagnosticTrials, launcher_idle
+        source_id = self.current.id
+        owner = self.window()
+        trials = DiagnosticTrials(self.service, source_id, lambda: launcher_idle(owner))
+        dialog = InstanceDiagnosticsDialog(self.service.path_for(source_id), self.current.loader, self.current.name, self, trials=trials)
         dialog.exec()
+        if dialog.trial_result:
+            self.refresh(dialog.selected_instance_id or source_id)
 
     def _open_instance(self):
         if self.current:

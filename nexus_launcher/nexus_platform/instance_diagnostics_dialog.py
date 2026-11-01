@@ -8,32 +8,72 @@ from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QListWidget,
 from nexus_launcher.instance_diagnostics import scan_instance, redact
 from nexus_launcher.themed_dialog import NexusDialog
 from nexus_launcher.nexus_platform.presentation_style import stylesheet
+from nexus_launcher.diagnostic_trial import TrialError
 
 
 class ScanWorker(QThread):
     result = Signal(object)
     failed = Signal(str)
 
-    def __init__(self, root, loader, parent):
+    def __init__(self, root, loader, parent, operation=None):
         super().__init__(parent)
         self.root, self.loader = root, loader
         self.cancel = threading.Event()
+        self.operation = operation
 
     def run(self):
         try:
-            self.result.emit(scan_instance(self.root, self.loader, self.cancel.is_set))
+            self.result.emit(self.operation(self.cancel.is_set) if self.operation else scan_instance(self.root, self.loader, self.cancel.is_set))
         except Exception as error:
             # Do not leak raw logs, commands, credentials or exception text.
-            self.failed.emit('Не удалось прочитать сборку: ' + type(error).__name__)
+            self.failed.emit(str(error) if isinstance(error, TrialError) else ('Операция не завершена: ' if self.operation else 'Не удалось прочитать сборку: ') + type(error).__name__)
+
+
+class TrialReviewDialog(NexusDialog):
+    def __init__(self, plan, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Подтвердить диагностическую копию')
+        self.setObjectName('platformRoot')
+        self.setStyleSheet(stylesheet())
+        self.resize(680, 480)
+        layout = QVBoxLayout(self)
+        details = QPlainTextEdit()
+        details.setReadOnly(True)
+        details.setPlainText(
+            f'Исходная сборка: {plan.source_root}\n\n'
+            f'Новая копия: {plan.trial_name}\nID: {plan.trial_id}\n\n'
+            f'Изменение только в копии:\nmods/{plan.filename} → disabled_mods/{plan.filename}\n\n'
+            f'Копировать: {len(plan.files)} файлов · {plan.total_bytes/(1024*1024):.1f} МБ\n\n'
+            'Копируются игровые моды, настройки и сохранения. Кэш, логи и архивы резервных копий не переносятся. '
+            'Исходные файлы не изменяются. Игра не запускается. Зависимые моды могут перестать работать; это пробное изменение, не подтверждённое исправление.\n\n'
+            'Закройте Minecraft, включая запущенные отдельно от NEXUS окна. Блокировка охватывает только этот лаунчер. '
+            'Сохранения в копии самостоятельны; новые изменения не сливаются с исходной сборкой. '
+            'Для возврата выберите исходную сборку. Копию можно удалить позднее через библиотеку.')
+        layout.addWidget(details)
+        row = QHBoxLayout()
+        row.addStretch()
+        self.cancel_button = QPushButton('Отмена')
+        self.cancel_button.clicked.connect(self.reject)
+        self.cancel_button.setDefault(True)
+        self.confirm_button = QPushButton('Создать копию')
+        self.confirm_button.clicked.connect(self.accept)
+        row.addWidget(self.cancel_button)
+        row.addWidget(self.confirm_button)
+        layout.addLayout(row)
+        self.cancel_button.setFocus()
 
 
 class InstanceDiagnosticsDialog(NexusDialog):
-    def __init__(self, root, loader, name, parent=None):
+    def __init__(self, root, loader, name, parent=None, *, trials=None):
         super().__init__(parent)
         self.root, self.loader = root, loader
         self.worker = None
         self.closing = False
         self.report = None
+        self.trials = trials
+        self.pending_plan = None
+        self.trial_result = None
+        self.selected_instance_id = ''
         self.setWindowTitle('Диагностика · ' + name)
         self.setObjectName('platformRoot')
         self.setStyleSheet(stylesheet())
@@ -44,7 +84,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
         title = QLabel('Диагностика сборки')
         title.setObjectName('pageTitle')
         layout.addWidget(title)
-        copy = QLabel('Локальная проверка метаданных и crash-report. Файлы не меняются, JAR не запускаются, отчёт никуда не отправляется.')
+        copy = QLabel('Проверка читает метаданные и crash-report, без запуска JAR и отправки отчёта. ' + ('Пробное изменение создаётся отдельно после подтверждения.' if trials else 'Изменения этой сборки здесь недоступны.'))
         copy.setWordWrap(True)
         layout.addWidget(copy)
         self.status = QLabel('Нажмите «Проверить сборку».')
@@ -71,6 +111,22 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.dependencies.setHeaderLabels(['Мод / обязательная зависимость', 'Объявлено / найдено'])
         self.dependencies.setAccessibleName('Объявленные зависимости включённых модов')
         tabs.addTab(self.dependencies, 'Зависимости')
+        trial_actions = QHBoxLayout()
+        self.prepare_trial = QPushButton('Подготовить копию без выбранного мода…')
+        self.prepare_trial.setVisible(trials is not None)
+        self.prepare_trial.setEnabled(False)
+        self.prepare_trial.clicked.connect(self.prepare_copy)
+        trial_actions.addWidget(self.prepare_trial)
+        self.open_trial = QPushButton('Открыть копию')
+        self.open_original = QPushButton('Вернуться к исходной сборке')
+        self.open_trial.hide()
+        self.open_original.hide()
+        self.open_trial.clicked.connect(lambda: self.choose_instance(self.trial_result.trial_id))
+        self.open_original.clicked.connect(lambda: self.choose_instance(self.trial_result.source_id))
+        trial_actions.addWidget(self.open_trial)
+        trial_actions.addWidget(self.open_original)
+        trial_actions.addStretch()
+        layout.addLayout(trial_actions)
         actions = QHBoxLayout()
         self.scan = QPushButton('Проверить сборку')
         self.scan.setObjectName('primaryAction')
@@ -91,6 +147,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.evidence.clear()
         self.status.setText('Читаем метаданные включённых JAR и последний доступный crash-report…')
         self.scan.setEnabled(False)
+        self.refresh_trial_actions()
         worker = ScanWorker(self.root, self.loader, self)
         self.worker = worker
         worker.result.connect(self.show_report)
@@ -130,20 +187,78 @@ class InstanceDiagnosticsDialog(NexusDialog):
             return
         finding = self.report.findings[row]
         self.evidence.setPlainText(redact(finding.title + '\n\n' + finding.detail + '\n\n' + '\n'.join(finding.evidence) + '\n\nКод: ' + finding.code))
+        self.refresh_trial_actions()
+
+    def refresh_trial_actions(self):
+        row = self.findings.currentRow()
+        filename = self.report.findings[row].filename if self.report and 0 <= row < len(self.report.findings) else ''
+        busy = self.worker is not None
+        self.prepare_trial.setEnabled(bool(self.trials and filename and not busy and not self.trial_result))
+        self.open_trial.setEnabled(not busy)
+        self.open_original.setEnabled(not busy)
+
+    def start_operation(self, operation, result_handler, message):
+        if self.worker is not None:
+            return
+        self.scan.setEnabled(False)
+        self.status.setText(message)
+        worker = ScanWorker(self.root, self.loader, self, operation)
+        self.worker = worker
+        worker.result.connect(result_handler)
+        worker.failed.connect(self.status.setText)
+        worker.finished.connect(self.scan_finished)
+        self.refresh_trial_actions()
+        worker.start()
+
+    def prepare_copy(self):
+        row = self.findings.currentRow()
+        if self.trials is None or self.report is None or not 0 <= row < len(self.report.findings):
+            return
+        filename = self.report.findings[row].filename
+        if not filename or self.trial_result:
+            return
+        self.start_operation(lambda cancelled: self.trials.prepare(filename, cancelled), self.copy_prepared,
+                             'Подготавливаем точный план и проверяем игровые файлы…')
+
+    def copy_prepared(self, plan):
+        self.pending_plan = plan
+
+    def review_trial(self, plan):
+        dialog = TrialReviewDialog(plan, self)
+        if dialog.exec():
+            self.start_operation(lambda cancelled: self.trials.apply(plan, cancelled), self.copy_created,
+                                 'Создаём и проверяем отдельную диагностическую копию…')
+        else:
+            self.status.setText('Создание копии отменено. Исходные файлы не менялись.')
+
+    def copy_created(self, result):
+        self.trial_result = result
+        self.status.setText('Копия создана: ' + result.trial_name + '. Выбранный мод отключён только в ней. Игра не запускалась; исправление ещё не подтверждено.')
+        self.open_trial.show()
+        self.open_original.show()
+
+    def choose_instance(self, identifier):
+        if self.worker is None:
+            self.selected_instance_id = identifier
+            self.accept()
 
     def scan_finished(self):
         worker, self.worker = self.worker, None
         if worker:
             worker.deleteLater()
         self.scan.setEnabled(True)
+        self.refresh_trial_actions()
         if self.closing:
             super().reject()
+        elif self.pending_plan is not None:
+            plan, self.pending_plan = self.pending_plan, None
+            self.review_trial(plan)
 
     def reject(self):
         if self.worker is not None:
             self.closing = True
             self.worker.cancel.set()
-            self.status.setText('Останавливаем чтение…')
+            self.status.setText('Завершаем текущий шаг и отменяем дальнейшие действия…')
             return
         super().reject()
 
