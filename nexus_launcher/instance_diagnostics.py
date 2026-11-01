@@ -11,6 +11,7 @@ import tomllib
 import zipfile
 
 from nexus_launcher.safe_paths import checked_path, pinned_directory
+from nexus_launcher.dependency_versions import check_version
 
 MAX_MODS = 1000
 MAX_METADATA = 1024 * 1024
@@ -26,6 +27,18 @@ class ModInfo:
     loaders: tuple[str, ...]
     requires: tuple[tuple[str, str], ...]
     nested: bool
+    versions: tuple[tuple[str, str], ...] = ()
+    requirements: tuple[tuple[str, str, str], ...] = ()
+
+
+@dataclass(frozen=True)
+class DependencyCheck:
+    filename: str
+    dependency: str
+    expression: str
+    actual: str
+    status: str
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -44,6 +57,7 @@ class DiagnosticReport:
     findings: tuple[Finding, ...]
     complete: bool
     crash_file: str = ''
+    version_checks: tuple[DependencyCheck, ...] = ()
 
 
 def redact(text):
@@ -71,6 +85,7 @@ def inspect_mod(path, consume=lambda size: None):
     if path.stat().st_size > 256 * 1024 * 1024:
         raise ValueError('Archive limit')
     ids, loaders, requires = set(), set(), set()
+    versions, requirements = [], set()
     with zipfile.ZipFile(path) as archive:
         members = archive.infolist()
         if len(members) > 16384:
@@ -94,6 +109,8 @@ def inspect_mod(path, consume=lambda size: None):
             loaders.add(loader)
             if loader == 'fabric':
                 ids.add(_id(data['id']))
+                value = data.get('version', '')
+                versions.append((data['id'], value if isinstance(value, str) and len(value) <= 256 and type(data.get('schemaVersion')) is int and data['schemaVersion'] == 1 else ''))
                 provided = data.get('provides', [])
                 if not isinstance(provided, list):
                     raise ValueError('Invalid aliases')
@@ -104,13 +121,16 @@ def inspect_mod(path, consume=lambda size: None):
                 for key, value in dependencies.items():
                     if not isinstance(value, str) and not (isinstance(value, list) and all(isinstance(v, str) for v in value)):
                         raise ValueError('Invalid version expression')
-                    requires.add((_id(key), json.dumps(value, ensure_ascii=False)))
+                    expression = json.dumps(value, ensure_ascii=False)
+                    requires.add((_id(key), expression))
+                    requirements.add((key, expression, 'fabric'))
                 nested = nested or bool(data.get('jars'))
             else:
                 mods = data.get('mods', [])
                 if not isinstance(mods, list) or not mods:
                     raise ValueError('Missing mod declarations')
                 ids.update(_id(x['modId']) for x in mods)
+                versions.extend((x['modId'], x.get('version', '') if isinstance(x.get('version', ''), str) and len(x.get('version', '')) <= 256 else '') for x in mods)
                 dependencies = data.get('dependencies', {})
                 if not isinstance(dependencies, dict):
                     raise ValueError('Invalid dependencies')
@@ -125,7 +145,8 @@ def inspect_mod(path, consume=lambda size: None):
                             if not isinstance(value, str):
                                 raise ValueError('Invalid version range')
                             requires.add((_id(item['modId']), value))
-    return ModInfo(path.name, tuple(sorted(ids)), tuple(sorted(loaders)), tuple(sorted(requires)), nested)
+                            requirements.add((item['modId'], value, 'maven'))
+    return ModInfo(path.name, tuple(sorted(ids)), tuple(sorted(loaders)), tuple(sorted(requires)), nested, tuple(versions), tuple(sorted(requirements)))
 
 
 def analyze_crash(text, mods, filename):
@@ -152,6 +173,44 @@ def analyze_crash(text, mods, filename):
         findings.append(Finding('info', 'CRASH_UNKNOWN', 'Причина завершения не установлена',
             'Распознанных признаков недостаточно. Отсутствие совпадений не означает исправность сборки.', (filename,)))
     return findings
+
+
+def declared_version_checks(mods, loader, complete, overridden=False):
+    owners = {}
+    for mod in mods:
+        for identifier in mod.ids:
+            owners.setdefault(identifier, []).append(mod)
+    checks = []
+    partial = not complete or any(mod.nested for mod in mods)
+    runtime = BUILTINS | {'fabric': {'fabricloader'}, 'forge': {'forge'}, 'neoforge': {'neoforge'}}.get(loader, set())
+    for mod in mods:
+        for identifier, expression, syntax in mod.requirements:
+            candidates = owners.get(identifier, [])
+            status, actual = 'UNKNOWN', ''
+            if identifier in runtime:
+                reason = 'Фактическая версия компонента среды здесь не определена.'
+            elif len(candidates) != 1:
+                reason = 'Нет единственного распознанного поставщика зависимости.'
+            else:
+                provider = candidates[0]
+                values = [v for key, v in provider.versions if key == identifier]
+                actual = values[0] if len(values) == 1 else ''
+                if overridden:
+                    reason = 'Найден файл переопределений Fabric. Его правила здесь не применялись.'
+                elif partial:
+                    reason = 'Есть вложенные или непрочитанные JAR; полнота поставщиков не установлена.'
+                elif len(mod.loaders) != 1 or len(provider.loaders) != 1 or loader not in mod.loaders or loader not in provider.loaders:
+                    reason = 'Загрузчик или источник объявления неоднозначен.'
+                elif len(values) != 1 or not actual:
+                    reason = 'Версия отсутствует или неоднозначна. Версия алиаса не угадывается.'
+                else:
+                    status = check_version(actual, expression, syntax)
+                    reason = {
+                        'MATCH': 'Числовая объявленная версия удовлетворяет этому условию. Работа игры не проверена.',
+                        'MISMATCH': 'Объявленная версия не удовлетворяет этому условию.',
+                        'UNKNOWN': 'Версия или условие вне поддержанного числового подмножества.'}[status]
+            checks.append(DependencyCheck(mod.filename, identifier, expression, actual, status, reason))
+    return tuple(checks)
 
 
 def scan_instance(root, loader, cancelled=lambda: False):
@@ -216,7 +275,18 @@ def scan_instance(root, loader, cancelled=lambda: False):
                 findings.append(Finding('warning', code, 'Не найдена зависимость: ' + identifier,
                     'Требует ' + mod.filename + '; условие: ' + expression + ('. Вложенные/непрочитанные JAR не позволяют подтвердить отсутствие.' if code == 'UNRESOLVED_DEPENDENCY' else '. Не найдена среди распознанных включённых модов.'),
                     (mod.filename, identifier, expression), mod.filename))
-        findings.append(Finding('info', 'LIMITATIONS', 'Границы проверки', 'Проверены объявления ID и обязательных зависимостей. Диапазоны версий, вложенные JAR, bytecode, malware safety и успешный запуск не проверены. Снимок не атомарный: после изменения модов повторите сканирование.'))
+        overridden = loader == 'fabric' and checked_path(root, 'config/fabric_loader_dependencies.json').exists()
+        checks = declared_version_checks(mods, loader, complete, overridden)
+        for check in checks:
+            if check.status == 'MISMATCH':
+                findings.append(Finding('warning', 'VERSION_MISMATCH', 'Не подходит версия зависимости: ' + check.dependency,
+                    check.reason + ' Требует: ' + check.filename,
+                    ('Условие: '+check.expression, 'Объявлено: '+check.actual), check.filename))
+        unknown = sum(check.status == 'UNKNOWN' for check in checks)
+        if unknown:
+            findings.append(Finding('info', 'VERSION_UNKNOWN', f'Не проверены условия версий: {unknown}',
+                'Смотрите вкладку зависимостей. Неизвестный формат, среда, вложенные JAR или неоднозначные ID не считаются соответствием.'))
+        findings.append(Finding('info', 'LIMITATIONS', 'Границы проверки', 'Проверены объявления ID и обязательных зависимостей; поддержано числовое подмножество условий Fabric и Maven. Вложенные JAR, нестандартные версии, bytecode, malware safety и успешный запуск не проверены. Снимок не атомарный: после изменения модов повторите сканирование.'))
         crash_file = ''
         crash_dir = checked_path(root, 'crash-reports')
         if crash_dir.is_dir():
@@ -245,4 +315,4 @@ def scan_instance(root, loader, cancelled=lambda: False):
                     findings.append(Finding('warning', 'CRASH_UNREADABLE', 'Crash-report недоступен', 'Повторите проверку после завершения записи файла.'))
         if not crash_file:
             findings.append(Finding('info', 'NO_CRASH_REPORT', 'Crash-report пока не найден', 'Exit code и отсутствие отчёта не устанавливают причину завершения.'))
-    return DiagnosticReport(tuple(mods), tuple(findings), complete, crash_file)
+    return DiagnosticReport(tuple(mods), tuple(findings), complete, crash_file, checks)

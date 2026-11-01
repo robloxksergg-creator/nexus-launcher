@@ -1,7 +1,7 @@
 name: Instance diagnostics read-only verification
 'on':
   push:
-    branches: [diagnostics/verify-center, diagnostics/verify-trial]
+    branches: [diagnostics/verify-center, diagnostics/verify-trial, diagnostics/verify-versions]
 permissions:
   contents: read
 jobs:
@@ -26,6 +26,18 @@ jobs:
       - name: Bounded metadata and crash interpretation
         run: |
           python -B -m unittest discover -s tests -p test_instance_diagnostics.py -v
+          exit $LASTEXITCODE
+      - name: Numeric Fabric and Maven condition subset
+        run: |
+          python -B -m unittest discover -s tests -p test_dependency_versions.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B -m unittest discover -s tests -p test_diagnostic_version_bindings.py -v
+          exit $LASTEXITCODE
+      - name: Version condition presentation
+        env:
+          NEXUS_VERSION_SCREENSHOT: ${{ runner.temp }}/dependency-versions.png
+        run: |
+          python -B -m unittest discover -s tests -p test_diagnostic_versions_ui.py -v
           exit $LASTEXITCODE
       - name: Native dialog, failure, cancellation and refresh
         env:
@@ -53,3 +65,4 @@ jobs:
             ${{ runner.temp }}/instance-diagnostics.png
             ${{ runner.temp }}/trial-confirmation.png
             ${{ runner.temp }}/trial-result.png
+            ${{ runner.temp }}/dependency-versions.png

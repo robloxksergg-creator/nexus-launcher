@@ -4,7 +4,7 @@ import threading
 from PySide6.QtCore import QThread, Signal, Qt
 from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QListWidget,
     QPlainTextEdit, QPushButton, QSplitter, QTabWidget, QTreeWidget,
-    QTreeWidgetItem, QVBoxLayout, QWidget)
+    QTreeWidgetItem, QVBoxLayout, QWidget, QHeaderView)
 from nexus_launcher.instance_diagnostics import scan_instance, redact
 from nexus_launcher.themed_dialog import NexusDialog
 from nexus_launcher.nexus_platform.presentation_style import stylesheet
@@ -109,7 +109,9 @@ class InstanceDiagnosticsDialog(NexusDialog):
         issues.setSizes([360, 560])
         tabs.addTab(issues, 'Проблемы и доказательства')
         self.dependencies = QTreeWidget()
-        self.dependencies.setHeaderLabels(['Мод / обязательная зависимость', 'Объявлено / найдено'])
+        self.dependencies.setHeaderLabels(['Мод / зависимость', 'Требуется / объявлено', 'Условие версии'])
+        self.dependencies.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.dependencies.header().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.dependencies.setAccessibleName('Объявленные зависимости включённых модов')
         tabs.addTab(self.dependencies, 'Зависимости')
         trial_actions = QHBoxLayout()
@@ -161,7 +163,10 @@ class InstanceDiagnosticsDialog(NexusDialog):
             return
         self.report = report
         count = sum(f.level != 'info' for f in report.findings)
-        self.status.setText(f'Прочитано JAR: {len(report.mods)} · Замечаний: {count} · ' + ('Обход завершён.' if report.complete else 'Отчёт неполный.') + ' Совместимость версий и успешный запуск не подтверждены.')
+        matched = sum(c.status == 'MATCH' for c in report.version_checks)
+        mismatched = sum(c.status == 'MISMATCH' for c in report.version_checks)
+        unknown = sum(c.status == 'UNKNOWN' for c in report.version_checks)
+        self.status.setText(f'Прочитано JAR: {len(report.mods)} · Замечаний: {count} · ' + ('Обход завершён.' if report.complete else 'Отчёт неполный.') + f' Условия версий: выполнено {matched}, не выполнено {mismatched}, не проверено {unknown}. Успешный запуск не подтверждён.')
         levels = {'error': 'Ошибка', 'warning': 'Внимание', 'info': 'Сведения'}
         for finding in report.findings:
             self.findings.addItem(levels[finding.level] + ' · ' + finding.title)
@@ -172,14 +177,23 @@ class InstanceDiagnosticsDialog(NexusDialog):
                 owners.setdefault(identifier, []).append(mod.filename)
         implicit = {'minecraft', 'java'} | {'fabric': {'fabricloader'}, 'forge': {'forge'}, 'neoforge': {'neoforge'}}.get(self.loader, set())
         for mod in report.mods:
-            parent = QTreeWidgetItem([mod.filename, ', '.join(mod.ids) or 'ID не распознан'])
+            versions = ', '.join(identifier+'@'+(version or '?') for identifier, version in mod.versions)
+            parent = QTreeWidgetItem([mod.filename, versions[:240] or ', '.join(mod.ids) or 'ID не распознан', ', '.join(mod.loaders)])
             self.dependencies.addTopLevelItem(parent)
             for identifier, expression in mod.requires:
                 location = 'Компонент среды; версия не проверена' if identifier in implicit else ', '.join(owners.get(identifier, [])) or 'Не найдена / не разрешена'
-                QTreeWidgetItem(parent, [identifier + ' · ' + expression, location])
+                checks = [c for c in report.version_checks if c.filename==mod.filename and c.dependency==identifier and c.expression==expression]
+                check = checks[0] if len(checks)==1 else None
+                labels = {'MATCH':'Условие выполнено', 'MISMATCH':'Не соответствует', 'UNKNOWN':'Не проверено'}
+                label = labels[check.status] if check else 'Не проверено'
+                actual = check.actual if check and check.actual else 'версия не определена'
+                child = QTreeWidgetItem(parent, [identifier, (expression+' / '+actual)[:240], label])
+                child.setToolTip(1, location[:512])
+                child.setToolTip(2, check.reason if check else 'Неоднозначное объявление.')
+                child.setData(2, Qt.ItemDataRole.AccessibleDescriptionRole, check.reason if check else 'Неоднозначное объявление.')
             if mod.nested:
                 QTreeWidgetItem(parent, ['Вложенные JAR', 'Не проверены'])
-        self.dependencies.resizeColumnToContents(0)
+        self.dependencies.setColumnWidth(0,240)
         if self.findings.count():
             self.findings.setCurrentRow(0)
 
