@@ -6,7 +6,7 @@ def stylesheet():
     t = TOKENS
     return f"""
     QWidget {{ color:{t['text']}; font-family:'Segoe UI'; font-size:{TYPE['body']}px; }}
-    QMainWindow, QWidget#platformRoot, QStackedWidget#platformPages {{ background:{t['background']}; }}
+    QMainWindow, QWidget#platformRoot, QWidget#modsWorkspace, QStackedWidget#platformPages {{ background:{t['background']}; }}
     QLabel {{ background:transparent; border:0; }}
     QFrame#nexusSidebar {{ background:{t['sidebar']}; border-right:1px solid {t['border']}; }}
     QLabel#nexusBrand {{ font-size:23px; font-weight:800; }}

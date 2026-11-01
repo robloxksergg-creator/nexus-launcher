@@ -1019,6 +1019,8 @@ class ModsPage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("modsWorkspace")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         root = QVBoxLayout(self)
         root.setContentsMargins(34, 24, 34, 30)
         title = QLabel("МОДЫ")

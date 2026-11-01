@@ -14,6 +14,7 @@ from nexus_launcher.nexus_platform.diagnostic_widgets import DiagnosticEntryCard
 from nexus_launcher.nexus_platform.instance_diagnostics_dialog import InstanceDiagnosticsDialog
 from nexus_launcher.nexus_platform.pages import ModsPage
 from nexus_launcher.nexus_platform.presentation_style import stylesheet
+from nexus_launcher.nexus_platform.theme_tokens import TOKENS
 
 
 class WorkspaceUITests(unittest.TestCase):
@@ -53,6 +54,7 @@ class WorkspaceUITests(unittest.TestCase):
             signals = []
             page.diagnostics_requested.connect(lambda: signals.append(True))
             page.show();QTest.qWait(100)
+            self.assertEqual(page.grab().toImage().pixelColor(5, 5).name(), TOKENS['background'])
             page.diagnostics_card.open_button.click()
             self.assertEqual(signals, [True])
             if os.environ.get('NEXUS_MODS_WORKSPACE_SCREENSHOT'):
@@ -76,6 +78,7 @@ class WorkspaceUITests(unittest.TestCase):
             dialog.show();dialog.tabs.setCurrentIndex(2);QTest.qWait(100)
             self.assertEqual(dialog.nested_tree.topLevelItemCount(), 1)
             self.assertEqual(dialog.nested_tree.topLevelItem(0).text(0), 'Кандидат')
+            self.assertEqual(dialog.nested_tree.topLevelItem(0).text(2), 'library@2')
             self.assertTrue(dialog.nested_source.isEnabled())
             if os.environ.get('NEXUS_NESTED_WORKSPACE_SCREENSHOT'):
                 self.assertTrue(dialog.grab().save(os.environ['NEXUS_NESTED_WORKSPACE_SCREENSHOT']))

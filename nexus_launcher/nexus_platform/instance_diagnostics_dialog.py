@@ -336,7 +336,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
         for index, finding in enumerate(report.findings):
             if finding.code not in labels:
                 continue
-            item = QTreeWidgetItem([labels[finding.code], ' · '.join(finding.evidence), finding.detail])
+            item = QTreeWidgetItem([labels[finding.code], redact(' · '.join(finding.evidence)), redact(finding.detail.removeprefix('Кандидат не считается загруженным модом. '))])
             item.setData(0, Qt.ItemDataRole.UserRole, index)
             item.setToolTip(1, redact(' · '.join(finding.evidence)))
             item.setToolTip(2, redact(finding.detail))
