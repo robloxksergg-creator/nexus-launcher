@@ -50,6 +50,18 @@ def stylesheet():
     QTreeWidget QHeaderView::section {{ background:{t['surface']}; color:{t['text']}; border:0; border-bottom:1px solid {t['border']}; padding:8px; }}
     QListWidget::item {{ padding:10px; border-radius:6px; }}
     QListWidget::item:selected {{ background:{t['wash']}; color:{t['accent']}; }}
+    QFrame#diagnosticMetric {{ background:{t['surface']}; border:1px solid {t['border']}; border-radius:{RADIUS['surface']}px; }}
+    QLabel#diagnosticNumber {{ font-family:'Bahnschrift','Segoe UI'; font-size:30px; font-weight:650; color:{t['accent']}; }}
+    QLabel#diagnosticNumber[tone="warning"] {{ color:{t['warning']}; }}
+    QLabel#diagnosticNumber[tone="muted"] {{ color:{t['muted']}; }}
+    QLabel#diagnosticStatus {{ color:{t['muted']}; font-size:{TYPE['caption']}px; }}
+    QListWidget#diagnosticFindings {{ border:0; background:transparent; outline:0; }}
+    QListWidget#diagnosticFindings::item {{ background:{t['sidebar']}; border:1px solid {t['border']}; padding:10px 12px; border-radius:{RADIUS['control']}px; }}
+    QListWidget#diagnosticFindings::item:hover {{ background:{t['surface']}; }}
+    QListWidget#diagnosticFindings::item:selected {{ background:{t['wash']}; border-left:3px solid {t['accent']}; color:{t['text']}; }}
+    QListWidget#diagnosticFindings:focus {{ border:1px solid {t['accent']}; }}
+    QPlainTextEdit#diagnosticEvidence {{ background:{t['sidebar']}; border:1px solid {t['border']}; padding:14px; }}
+    QSplitter::handle {{ background:transparent; }}
     QFrame#settingsShell, QStackedWidget#settingsPanels {{ background:{t['surface']}; border-radius:12px; }}
     QFrame#settingsWorkspace {{ background:{t['background']}; }}
     QFrame#settingsMenu {{ background:transparent; border:0; }}

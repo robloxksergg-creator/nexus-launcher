@@ -8,6 +8,7 @@ import unittest
 import zipfile
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from nexus_launcher.nexus_platform.instance_diagnostics_dialog import InstanceDiagnosticsDialog
 
@@ -40,6 +41,9 @@ class DiagnosticsUITests(unittest.TestCase):
             self.assertEqual(len(dialog.report.mods),1)
             self.assertEqual(dialog.dependencies.topLevelItemCount(),1)
             self.assertTrue(dialog.scan.isEnabled())
+            self.assertEqual(dialog.summary_values[0].text(), '1')
+            self.assertEqual(dialog.progress.maximum(), 1)
+            self.assertEqual(dialog.progress.value(), 1)
             for row, finding in enumerate(dialog.report.findings):
                 dialog.findings.setCurrentRow(row)
                 self.assertNotIn('NEVER_SHOW_THIS',dialog.evidence.toPlainText())
@@ -50,7 +54,11 @@ class DiagnosticsUITests(unittest.TestCase):
             if path:
                 QTest.qWait(150)
                 self.assertTrue(dialog.grab().save(path))
-            dialog.resize(700,500);QTest.qWait(100)
+            dialog.resize(700,600);QTest.qWait(100)
+            self.assertEqual(dialog.issues_splitter.orientation(), Qt.Orientation.Vertical)
+            self.assertFalse(dialog.evidence.visibleRegion().isEmpty())
+            if os.environ.get('NEXUS_DIAGNOSTICS_NARROW_SCREENSHOT'):
+                self.assertTrue(dialog.grab().save(os.environ['NEXUS_DIAGNOSTICS_NARROW_SCREENSHOT']))
             self.assertFalse(dialog.scan.visibleRegion().isEmpty())
             self.assertFalse(dialog.close_button.visibleRegion().isEmpty())
             dialog.scan.click();self.wait(dialog)
@@ -71,6 +79,8 @@ class DiagnosticsUITests(unittest.TestCase):
             dialog=InstanceDiagnosticsDialog(root,'fabric','Ошибка чтения')
             dialog.start_scan();self.wait(dialog)
             self.assertIsNone(dialog.report)
+            self.assertEqual(dialog.summary_values[0].text(), '—')
+            self.assertEqual(dialog.progress.maximum(), 1)
             self.assertIn('Не удалось',dialog.status.text())
             root.mkdir();dialog.start_scan();self.wait(dialog)
             self.assertIsNotNone(dialog.report)

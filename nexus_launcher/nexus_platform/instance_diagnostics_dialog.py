@@ -1,14 +1,16 @@
 """Explicit read-only diagnosis using the existing instance and dialog owners."""
 import threading
 
-from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtCore import QThread, Signal, Qt, QSize
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QListWidget,
-    QPlainTextEdit, QPushButton, QSplitter, QTabWidget, QTreeWidget,
+    QPlainTextEdit, QPushButton, QSplitter, QTabWidget, QTreeWidget, QFrame, QListWidgetItem, QProgressBar,
     QTreeWidgetItem, QVBoxLayout, QWidget, QHeaderView)
 from nexus_launcher.instance_diagnostics import scan_instance, redact
 from nexus_launcher.themed_dialog import NexusDialog
 from nexus_launcher.nexus_platform.presentation_style import stylesheet
 from nexus_launcher.diagnostic_trial import TrialError
+from nexus_launcher.nexus_platform.theme_tokens import TOKENS
 
 
 class ScanWorker(QThread):
@@ -35,8 +37,21 @@ class TrialReviewDialog(NexusDialog):
         self.setWindowTitle('Подтвердить диагностическую копию')
         self.setObjectName('platformRoot')
         self.setStyleSheet(stylesheet())
-        self.resize(680, 480)
+        self.resize(740, 600)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
+        eyebrow = QLabel('ПРОБНОЕ ИЗМЕНЕНИЕ  /  ОТДЕЛЬНАЯ КОПИЯ')
+        eyebrow.setObjectName('eyebrow')
+        title = QLabel('Проверим без одного мода')
+        title.setObjectName('dialogTitle')
+        title.setWordWrap(True)
+        caption = QLabel('Исходная сборка останется на месте. Проверьте план перед созданием копии.')
+        caption.setObjectName('muted')
+        caption.setWordWrap(True)
+        layout.addWidget(eyebrow)
+        layout.addWidget(title)
+        layout.addWidget(caption)
         details = QPlainTextEdit()
         details.setReadOnly(True)
         details.setPlainText(
@@ -56,6 +71,7 @@ class TrialReviewDialog(NexusDialog):
         self.cancel_button.clicked.connect(self.reject)
         self.cancel_button.setDefault(True)
         self.confirm_button = QPushButton('Создать копию')
+        self.confirm_button.setObjectName('primaryAction')
         self.confirm_button.clicked.connect(self.accept)
         row.addWidget(self.cancel_button)
         row.addWidget(self.confirm_button)
@@ -78,23 +94,64 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.setWindowTitle('Диагностика · ' + name)
         self.setObjectName('platformRoot')
         self.setStyleSheet(stylesheet())
-        self.resize(960, 680)
+        self.resize(1080, 760)
         available = QApplication.primaryScreen().availableGeometry()
         self.resize(min(self.width(), int(available.width()*.94)), min(self.height(), int(available.height()*.94)))
         layout = QVBoxLayout(self)
-        title = QLabel('Диагностика сборки')
-        title.setObjectName('pageTitle')
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
+        eyebrow = QLabel('NEXUS  /  СОСТОЯНИЕ СБОРКИ')
+        eyebrow.setObjectName('eyebrow')
+        layout.addWidget(eyebrow)
+        title = QLabel('Центр диагностики')
+        title.setObjectName('dialogTitle')
         layout.addWidget(title)
-        copy = QLabel('Проверка читает метаданные и crash-report, без запуска JAR и отправки отчёта. ' + ('Пробное изменение создаётся отдельно после подтверждения.' if trials else 'Изменения этой сборки здесь недоступны.'))
-        copy.setWordWrap(True)
-        layout.addWidget(copy)
-        self.status = QLabel('Нажмите «Проверить сборку».')
+        context = QLabel(name + '  ·  ' + loader.capitalize())
+        context.setTextFormat(Qt.TextFormat.PlainText)
+        context.setObjectName('muted')
+        context.setWordWrap(True)
+        context.setMaximumHeight(44)
+        context.setToolTip(name)
+        layout.addWidget(context)
+        summary = QHBoxLayout()
+        summary.setSpacing(12)
+        self.summary_values = []
+        for caption, tone in [('JAR прочитано', 'accent'), ('Замечания', 'warning'), ('Условия не проверены', 'muted')]:
+            card = QFrame()
+            card.setObjectName('diagnosticMetric')
+            cell = QVBoxLayout(card)
+            cell.setContentsMargins(16, 10, 16, 10)
+            value = QLabel('—')
+            value.setObjectName('diagnosticNumber')
+            value.setProperty('tone', tone)
+            label = QLabel(caption)
+            label.setObjectName('muted')
+            label.setWordWrap(True)
+            cell.addWidget(value)
+            cell.addWidget(label)
+            summary.addWidget(card, 1)
+            self.summary_values.append(value)
+        layout.addLayout(summary)
+        self.status = QLabel('Начните проверку, чтобы увидеть замечания и их источники.')
+        self.status.setObjectName('diagnosticStatus')
         self.status.setWordWrap(True)
+        self.status.setMinimumHeight(40)
         self.status.setAccessibleName('Состояние диагностики')
         layout.addWidget(self.status)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 1)
+        self.progress.setValue(0)
+        self.progress.setTextVisible(False)
+        self.progress.setFixedHeight(4)
+        self.progress.setAccessibleName('Ход диагностики')
+        layout.addWidget(self.progress)
         tabs = QTabWidget()
+        self.tabs = tabs
         layout.addWidget(tabs, 1)
         issues = QSplitter(Qt.Orientation.Horizontal)
+        self.issues_splitter = issues
+        issues.setChildrenCollapsible(False)
+        issues.setHandleWidth(12)
         self.findings = QListWidget()
         self.findings.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.findings.setTextElideMode(Qt.TextElideMode.ElideRight)
@@ -104,18 +161,40 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.evidence.setReadOnly(True)
         self.evidence.setAccessibleName('Объяснение и доказательства выбранного результата')
         self.evidence.setPlaceholderText('Здесь будут объяснение, исходные объявления и ограничения проверки.')
+        self.findings.setObjectName('diagnosticFindings')
+        self.findings.setSpacing(4)
+        details = QWidget()
+        detail_layout = QVBoxLayout(details)
+        detail_layout.setContentsMargins(12, 8, 0, 0)
+        detail_layout.setSpacing(8)
+        self.detail_kind = QLabel('ОБЪЯСНЕНИЕ И ИСТОЧНИК')
+        self.detail_kind.setObjectName('eyebrow')
+        self.detail_title = QLabel('Выберите результат проверки')
+        self.detail_title.setObjectName('cardTitle')
+        self.detail_title.setWordWrap(True)
+        self.detail_title.setTextFormat(Qt.TextFormat.PlainText)
+        detail_layout.addWidget(self.detail_kind)
+        detail_layout.addWidget(self.detail_title)
+        detail_layout.addWidget(self.evidence, 1)
+        self.evidence.setObjectName('diagnosticEvidence')
         issues.addWidget(self.findings)
-        issues.addWidget(self.evidence)
+        issues.addWidget(details)
         issues.setSizes([360, 560])
         tabs.addTab(issues, 'Проблемы и доказательства')
         self.dependencies = QTreeWidget()
+        self.dependencies.setAlternatingRowColors(False)
+        self.dependencies.setIndentation(18)
+        self.dependencies.setUniformRowHeights(True)
+        self.dependencies.setMinimumWidth(0)
         self.dependencies.setHeaderLabels(['Мод / зависимость', 'Требуется / объявлено', 'Условие версии'])
         self.dependencies.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.dependencies.header().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.dependencies.header().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        self.dependencies.setColumnWidth(2, 180)
         self.dependencies.setAccessibleName('Объявленные зависимости включённых модов')
         tabs.addTab(self.dependencies, 'Зависимости')
         trial_actions = QHBoxLayout()
-        self.prepare_trial = QPushButton('Подготовить копию без выбранного мода…')
+        self.prepare_trial = QPushButton('Создать пробную копию…')
+        self.prepare_trial.setToolTip('Подготовить копию без мода из выбранного результата. Изменение требует подтверждения.')
         self.prepare_trial.setVisible(trials is not None)
         self.prepare_trial.setEnabled(False)
         self.prepare_trial.clicked.connect(self.prepare_copy)
@@ -134,12 +213,25 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.scan = QPushButton('Проверить сборку')
         self.scan.setObjectName('primaryAction')
         self.scan.clicked.connect(self.start_scan)
+        scope = QLabel('Локальная проверка · без запуска игры')
+        scope.setObjectName('muted')
+        scope.setWordWrap(True)
+        actions.addWidget(scope, 1)
         actions.addWidget(self.scan)
-        actions.addStretch()
         self.close_button = QPushButton('Закрыть')
         self.close_button.clicked.connect(self.reject)
         actions.addWidget(self.close_button)
         layout.addLayout(actions)
+        self.scan.setFocus()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'issues_splitter'):
+            compact = self.width() < 820
+            orientation = Qt.Orientation.Vertical if compact else Qt.Orientation.Horizontal
+            if self.issues_splitter.orientation() != orientation:
+                self.issues_splitter.setOrientation(orientation)
+                self.issues_splitter.setSizes([150, 250] if compact else [360, 560])
 
     def start_scan(self):
         if self.worker is not None or self.review_dialog is not None:
@@ -148,6 +240,10 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.findings.clear()
         self.dependencies.clear()
         self.evidence.clear()
+        self.detail_title.setText('Читаем сборку…')
+        for value in self.summary_values:
+            value.setText('—')
+        self.progress.setRange(0, 0)
         self.status.setText('Читаем метаданные включённых JAR и последний доступный crash-report…')
         self.scan.setEnabled(False)
         self.refresh_trial_actions()
@@ -167,10 +263,15 @@ class InstanceDiagnosticsDialog(NexusDialog):
         mismatched = sum(c.status == 'MISMATCH' for c in report.version_checks)
         unknown = sum(c.status == 'UNKNOWN' for c in report.version_checks)
         self.status.setText(f'Прочитано JAR: {len(report.mods)} · Замечаний: {count} · ' + ('Обход завершён.' if report.complete else 'Отчёт неполный.') + f' Условия версий: выполнено {matched}, не выполнено {mismatched}, не проверено {unknown}. Успешный запуск не подтверждён.')
+        for label, value in zip(self.summary_values, (len(report.mods), count, unknown)):
+            label.setText(str(value))
         levels = {'error': 'Ошибка', 'warning': 'Внимание', 'info': 'Сведения'}
         for finding in report.findings:
-            self.findings.addItem(levels[finding.level] + ' · ' + finding.title)
-            self.findings.item(self.findings.count()-1).setToolTip(redact(finding.title))
+            item = QListWidgetItem(levels[finding.level] + '\n' + redact(finding.title))
+            item.setSizeHint(QSize(0, 72))
+            item.setForeground(QColor(TOKENS[{'error':'danger', 'warning':'warning', 'info':'text'}[finding.level]]))
+            item.setToolTip(redact(finding.title))
+            self.findings.addItem(item)
         owners = {}
         for mod in report.mods:
             for identifier in mod.ids:
@@ -192,7 +293,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
                 child.setToolTip(2, check.reason if check else 'Неоднозначное объявление.')
                 child.setData(2, Qt.ItemDataRole.AccessibleDescriptionRole, check.reason if check else 'Неоднозначное объявление.')
             if mod.nested:
-                QTreeWidgetItem(parent, ['Вложенные JAR', 'Не проверены'])
+                QTreeWidgetItem(parent, ['Вложенные JAR', 'Кандидаты — см. замечания', 'Загрузка не подтверждена'])
         self.dependencies.setColumnWidth(0,240)
         if self.findings.count():
             self.findings.setCurrentRow(0)
@@ -201,6 +302,8 @@ class InstanceDiagnosticsDialog(NexusDialog):
         if self.report is None or not 0 <= row < len(self.report.findings):
             return
         finding = self.report.findings[row]
+        self.detail_title.setText(redact(finding.title))
+        self.detail_kind.setText({'error':'ОШИБКА', 'warning':'ТРЕБУЕТ ВНИМАНИЯ', 'info':'СВЕДЕНИЯ'}[finding.level] + '  /  ИСТОЧНИКИ')
         self.evidence.setPlainText(redact(finding.title + '\n\n' + finding.detail + '\n\n' + '\n'.join(finding.evidence) + '\n\nКод: ' + finding.code))
         self.refresh_trial_actions()
 
@@ -216,6 +319,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
         if self.worker is not None:
             return
         self.scan.setEnabled(False)
+        self.progress.setRange(0, 0)
         self.status.setText(message)
         worker = ScanWorker(self.root, self.loader, self, operation)
         self.worker = worker
@@ -273,6 +377,10 @@ class InstanceDiagnosticsDialog(NexusDialog):
         worker, self.worker = self.worker, None
         if worker:
             worker.deleteLater()
+        self.progress.setRange(0, 1)
+        self.progress.setValue(1 if self.report else 0)
+        if self.report is None:
+            self.detail_title.setText("Проверка не завершена — попробуйте ещё раз")
         self.scan.setEnabled(True)
         self.refresh_trial_actions()
         if self.closing:

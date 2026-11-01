@@ -3,6 +3,7 @@
 No JAR extraction, class loading, network, repairs, or claim of malware safety.
 """
 from dataclasses import dataclass
+import io
 import itertools
 import json
 from pathlib import Path
@@ -84,9 +85,13 @@ def inspect_mod(path, consume=lambda size: None):
     """Public metadata only; preserve declared version expressions verbatim."""
     if path.stat().st_size > 256 * 1024 * 1024:
         raise ValueError('Archive limit')
+    return _inspect_archive(path, path.name, consume)
+
+
+def _inspect_archive(source, filename, consume):
     ids, loaders, requires = set(), set(), set()
     versions, requirements = [], set()
-    with zipfile.ZipFile(path) as archive:
+    with zipfile.ZipFile(source) as archive:
         members = archive.infolist()
         if len(members) > 16384:
             raise ValueError('Archive index limit')
@@ -146,7 +151,87 @@ def inspect_mod(path, consume=lambda size: None):
                                 raise ValueError('Invalid version range')
                             requires.add((_id(item['modId']), value))
                             requirements.add((item['modId'], value, 'maven'))
-    return ModInfo(path.name, tuple(sorted(ids)), tuple(sorted(loaders)), tuple(sorted(requires)), nested, tuple(versions), tuple(sorted(requirements)))
+    return ModInfo(filename, tuple(sorted(ids)), tuple(sorted(loaders)), tuple(sorted(requires)), nested, tuple(versions), tuple(sorted(requirements)))
+
+
+def inspect_nested(path, consume, state, cancelled=lambda: False):
+    """Read Fabric candidates in memory; never infer loader selection or extract."""
+    results = []
+
+    def visit(source, chain, depth):
+        if cancelled():
+            return
+        with zipfile.ZipFile(source) as archive:
+            members = archive.infolist()
+            if len(members) > 16384:
+                raise ValueError('Archive index limit')
+            if any(x.filename == 'META-INF/jarjar/metadata.json' for x in members):
+                results.append(('UNKNOWN', chain, 'JarJar inventory is not supported'))
+            entries = [x for x in members if x.filename == 'fabric.mod.json']
+            if not entries:
+                return
+            if len(entries) != 1:
+                raise ValueError('Ambiguous metadata')
+            entry = entries[0]
+            if entry.file_size > MAX_METADATA or entry.flag_bits & 1:
+                raise ValueError('Metadata limit')
+            with archive.open(entry) as stream:
+                raw = stream.read(MAX_METADATA + 1)
+            consume(len(raw))
+            if len(raw) > MAX_METADATA:
+                raise ValueError('Metadata limit')
+            data = json.loads(raw.decode('utf-8'), object_pairs_hook=_unique_json)
+            jars = data.get('jars', [])
+            if not isinstance(jars, list) or len(jars) > 64:
+                raise ValueError('Nested declarations limit')
+            seen = set()
+            for declaration in jars:
+                if cancelled():
+                    return
+                name = declaration.get('file') if isinstance(declaration, dict) else None
+                if (not isinstance(name, str) or not name or len(name) > 512
+                        or '\\' in name or ':' in name or name.startswith('/')
+                        or any(part in {'', '.', '..'} for part in name.split('/'))
+                        or not name.lower().endswith('.jar') or name in seen):
+                    raise ValueError('Invalid nested path')
+                seen.add(name)
+                child = chain + ' ! ' + name
+                if depth >= 3 or state[0] >= 64:
+                    results.append(('LIMIT', child, 'Nested depth/count limit'))
+                    return
+                state[0] += 1
+                matches = [x for x in members if x.filename == name]
+                if len(matches) != 1:
+                    results.append(('UNKNOWN', child, 'Missing or ambiguous archive member'))
+                    continue
+                item = matches[0]
+                if item.is_dir() or item.flag_bits & 1 or item.file_size > 8 * 1024 * 1024:
+                    results.append(('LIMIT', child, 'Nested archive limit'))
+                    continue
+                if state[1] + item.file_size > 32 * 1024 * 1024:
+                    results.append(('LIMIT', child, 'Total nested bytes limit'))
+                    return
+                state[1] += item.file_size
+                try:
+                    with archive.open(item) as stream:
+                        content = stream.read(item.file_size + 1)
+                    if len(content) != item.file_size:
+                        raise ValueError('Nested size mismatch')
+                    mod = _inspect_archive(io.BytesIO(content), child, consume)
+                    detail = ', '.join(key + '@' + (version or '?') for key, version in mod.versions)
+                    results.append(('CANDIDATE' if mod.ids else 'UNKNOWN', child,
+                                    detail or 'No supported mod declaration'))
+                    visit(io.BytesIO(content), child, depth + 1)
+                except (OSError, ValueError, KeyError, TypeError, AttributeError,
+                        zipfile.BadZipFile, RuntimeError, NotImplementedError, RecursionError):
+                    results.append(('UNKNOWN', child, 'Unreadable nested metadata'))
+
+    try:
+        visit(path, path.name, 0)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError,
+            zipfile.BadZipFile, RuntimeError, NotImplementedError, RecursionError):
+        results.append(('UNKNOWN', path.name, 'Invalid nested declarations'))
+    return results
 
 
 def analyze_crash(text, mods, filename):
@@ -230,6 +315,7 @@ def scan_instance(root, loader, cancelled=lambda: False):
                 paths = paths[:MAX_MODS]
                 complete = False
                 findings.append(Finding('warning', 'SCAN_LIMIT', 'Достигнут лимит сканирования', 'Отчёт неполный; отсутствие зависимости не подтверждается.'))
+        nested_budget = [0, 0]
         budget = 0
         def consume(size):
             nonlocal budget
@@ -247,6 +333,12 @@ def scan_instance(root, loader, cancelled=lambda: False):
                     continue
                 mod = inspect_mod(path, consume)
                 mods.append(mod)
+                if mod.nested:
+                    for status, origin, detail in inspect_nested(path, consume, nested_budget, cancelled):
+                        findings.append(Finding('info' if status == 'CANDIDATE' else 'warning',
+                            'NESTED_' + status, 'Вложенный JAR: ' + status,
+                            'Кандидат не считается загруженным модом. ' + detail,
+                            (origin,), name))
                 if not mod.ids:
                     complete = False
                     findings.append(Finding('info', 'UNKNOWN_METADATA', 'Не распознаны метаданные', 'JAR не исполнялся. Он может использовать неподдерживаемый формат.', (name,), name))

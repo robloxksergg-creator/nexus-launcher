@@ -1,7 +1,7 @@
 name: Instance diagnostics read-only verification
 'on':
   push:
-    branches: [diagnostics/verify-center, diagnostics/verify-trial, diagnostics/verify-versions]
+    branches: [diagnostics/verify-center, diagnostics/verify-trial, diagnostics/verify-versions, diagnostics/verify-design]
 permissions:
   contents: read
 jobs:
@@ -27,6 +27,10 @@ jobs:
         run: |
           python -B -m unittest discover -s tests -p test_instance_diagnostics.py -v
           exit $LASTEXITCODE
+      - name: Nested Fabric candidate inventory
+        run: |
+          python -B -m unittest discover -s tests -p test_nested_diagnostics.py -v
+          exit $LASTEXITCODE
       - name: Numeric Fabric and Maven condition subset
         run: |
           python -B -m unittest discover -s tests -p test_dependency_versions.py -v
@@ -41,6 +45,7 @@ jobs:
           exit $LASTEXITCODE
       - name: Native dialog, failure, cancellation and refresh
         env:
+          NEXUS_DIAGNOSTICS_NARROW_SCREENSHOT: ${{ runner.temp }}/diagnostics-narrow.png
           NEXUS_DIAGNOSTICS_SCREENSHOT: ${{ runner.temp }}/instance-diagnostics.png
         run: |
           python -B -m unittest discover -s tests -p test_instance_diagnostics_ui.py -v
@@ -66,3 +71,4 @@ jobs:
             ${{ runner.temp }}/trial-confirmation.png
             ${{ runner.temp }}/trial-result.png
             ${{ runner.temp }}/dependency-versions.png
+            ${{ runner.temp }}/diagnostics-narrow.png
