@@ -358,7 +358,12 @@ class InstancePage(QWidget):
         self.mods_search.setPlaceholderText("Найти установленный мод…")
         self.mods_search.textChanged.connect(lambda text: self._filter_list(self.mods, text))
         self.mods.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        mods_layout.addWidget(self.mods_search)
+        mod_header = QHBoxLayout()
+        mod_header.addWidget(self.mods_search, 1)
+        diagnostics = QPushButton("Диагностика сборки")
+        diagnostics.clicked.connect(self._open_diagnostics)
+        mod_header.addWidget(diagnostics)
+        mods_layout.addLayout(mod_header)
         mods_layout.addWidget(self.mods)
         mod_actions = QHBoxLayout()
         for label, handler in (("Включить / отключить", self._toggle_mod), ("Удалить мод", self._remove_mod), ("Добавить JAR", self._import_jar), ("Открыть папку", self._open_mods)):
@@ -751,6 +756,13 @@ class InstancePage(QWidget):
         folder = self.service.path_for(self.current.id) / "mods"
         folder.mkdir(parents=True, exist_ok=True)
         os.startfile(str(folder))
+
+    def _open_diagnostics(self):
+        if self.current is None:
+            return
+        from nexus_launcher.nexus_platform.instance_diagnostics_dialog import InstanceDiagnosticsDialog
+        dialog = InstanceDiagnosticsDialog(self.service.path_for(self.current.id), self.current.loader, self.current.name, self)
+        dialog.exec()
 
     def _open_instance(self):
         if self.current:
