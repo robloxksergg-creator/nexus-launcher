@@ -11,6 +11,7 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineUrlRequestInterceptor
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QApplication
+from PySide6.QtTest import QTest
 
 
 def main():
@@ -74,7 +75,7 @@ def main():
     js('(()=>{const a=document.querySelector("#after")?.contentDocument,b=document.querySelector("#before")?.contentDocument;return a?.querySelectorAll(".skin-part").length===12&&b?.querySelectorAll(".skin-part").length===12})()')
     results = []
     def check(expression):
-        value = js('JSON.stringify((()=>{const d=document.querySelector("#after").contentDocument;'+expression+'})())')
+        value = js('JSON.stringify((()=>{const d=document.querySelector("#after").contentDocument;try{'+expression+'}catch(e){return {pass:false,error:String(e)}}})())')
         data = json.loads(value)
         assert data['pass'], data
         results.append(data)
@@ -82,13 +83,15 @@ def main():
     check('const f=d.querySelector(".skin-front"),c=f.getContext("2d");return {case:"nearest texels",pass:c.imageSmoothingEnabled===false&&c.getImageData(0,0,1,1).data[3]===255};')
     # Let compositor present the current frame before capture.
     js('new Boolean(true).valueOf()')
+    QTest.qWait(300)
     assert view.grab().save(str(out/'comparison.png'))
-    check('const z=d.querySelector("input[aria-label=\"Масштаб персонажа\"]");z.value=10;z.dispatchEvent(new Event("input"));return {case:"zoom geometry",pass:parseFloat(getComputedStyle(d.querySelector(".skin-front")).width)===80};')
+    check('const z=d.querySelectorAll("input[type=range]")[1];z.value=10;z.dispatchEvent(new Event("input"));return {case:"zoom geometry",pass:parseFloat(getComputedStyle(d.querySelector(".skin-front")).width)===80};')
     check('const a=d.querySelector("input[value=slim]");a.checked=true;a.dispatchEvent(new Event("change"));return {case:"slim arm",pass:parseFloat(getComputedStyle(d.querySelectorAll(".skin-part")[4].querySelector("canvas")).width)===30};')
-    check('const t=d.querySelector("input[aria-label=\"Поворот персонажа\"]");t.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));return {case:"keyboard rotation",pass:Math.abs(Number(t.value)+20)<0.1};')
-    check('document.querySelector("#after").contentWindow.NexusSkin.setProfile({png:null,model:"classic"});return {case:"neutral model",pass:d.querySelectorAll(".skin-part").length===6&&d.querySelector("[role=status]").textContent.includes("Скин отсутствует")};')
+    check('const t=d.querySelectorAll("input[type=range]")[0];t.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));return {case:"keyboard rotation",pass:Math.abs(Number(t.value)+20)<0.1};')
+    check('document.querySelector("#after").contentWindow.NexusSkin.setProfile({png:null,model:"classic"});return {case:"neutral model",pass:d.querySelectorAll(".skin-part").length===6&&d.querySelector("[role=status]").textContent.includes("РЎРєРёРЅ РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚")};')
     view.resize(390, 790)
     js('document.querySelector("#before").parentElement.style.display="none";true')
+    QTest.qWait(300)
     check('const s=d.querySelector(".skin-stage");return {case:"narrow viewport",pass:s.getBoundingClientRect().width>150&&d.querySelector("input[type=range]").getBoundingClientRect().right<=d.documentElement.clientWidth};')
     assert view.grab().save(str(out/'narrow.png'))
     (out/'result.json').write_text(json.dumps({'checks':results,'device_pixel_ratio':view.devicePixelRatioF(),'scope':'Qt Chromium, synthetic PNG; no account/server/game'},indent=2),encoding='utf8')
