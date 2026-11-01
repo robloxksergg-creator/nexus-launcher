@@ -100,10 +100,13 @@ class InstanceDiagnosticsDialog(NexusDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
+        self.workspace_layout = layout
         eyebrow = QLabel('NEXUS  /  СОСТОЯНИЕ СБОРКИ')
+        self.workspace_eyebrow = eyebrow
         eyebrow.setObjectName('eyebrow')
         layout.addWidget(eyebrow)
         title = QLabel('Центр диагностики')
+        self.workspace_title = title
         title.setObjectName('dialogTitle')
         layout.addWidget(title)
         context = QLabel(name + '  ·  ' + loader.capitalize())
@@ -116,9 +119,11 @@ class InstanceDiagnosticsDialog(NexusDialog):
         summary = QHBoxLayout()
         summary.setSpacing(12)
         self.summary_values = []
+        self.summary_cards = []
         for caption, tone in [('JAR прочитано', 'accent'), ('Замечания', 'warning'), ('Условия не проверены', 'muted')]:
             card = QFrame()
             card.setObjectName('diagnosticMetric')
+            self.summary_cards.append(card)
             cell = QVBoxLayout(card)
             cell.setContentsMargins(16, 10, 16, 10)
             value = QLabel('—')
@@ -150,6 +155,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
         layout.addWidget(tabs, 1)
         issues = QSplitter(Qt.Orientation.Horizontal)
         self.issues_splitter = issues
+        issues.setObjectName('diagnosticSplitter')
         issues.setChildrenCollapsible(False)
         issues.setHandleWidth(12)
         self.findings = QListWidget()
@@ -161,6 +167,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.evidence.setReadOnly(True)
         self.evidence.setAccessibleName('Объяснение и доказательства выбранного результата')
         self.evidence.setPlaceholderText('Здесь будут объяснение, исходные объявления и ограничения проверки.')
+        self.findings.setMinimumHeight(108)
         self.findings.setObjectName('diagnosticFindings')
         self.findings.setSpacing(4)
         details = QWidget()
@@ -228,10 +235,20 @@ class InstanceDiagnosticsDialog(NexusDialog):
         super().resizeEvent(event)
         if hasattr(self, 'issues_splitter'):
             compact = self.width() < 820
+            self.workspace_eyebrow.setVisible(not compact)
+            self.workspace_layout.setSpacing(8 if compact else 12)
+            self.workspace_title.setProperty('compact', compact)
+            self.workspace_title.style().unpolish(self.workspace_title)
+            self.workspace_title.style().polish(self.workspace_title)
+            for card, value in zip(self.summary_cards, self.summary_values):
+                card.layout().setContentsMargins(12, 6 if compact else 10, 12, 6 if compact else 10)
+                value.setProperty('compact', compact)
+                value.style().unpolish(value)
+                value.style().polish(value)
             orientation = Qt.Orientation.Vertical if compact else Qt.Orientation.Horizontal
             if self.issues_splitter.orientation() != orientation:
                 self.issues_splitter.setOrientation(orientation)
-                self.issues_splitter.setSizes([150, 250] if compact else [360, 560])
+                self.issues_splitter.setSizes([130, 180] if compact else [360, 560])
 
     def start_scan(self):
         if self.worker is not None or self.review_dialog is not None:

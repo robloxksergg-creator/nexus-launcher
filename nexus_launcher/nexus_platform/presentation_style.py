@@ -61,7 +61,9 @@ def stylesheet():
     QListWidget#diagnosticFindings::item:selected {{ background:{t['wash']}; border-left:3px solid {t['accent']}; color:{t['text']}; }}
     QListWidget#diagnosticFindings:focus {{ border:1px solid {t['accent']}; }}
     QPlainTextEdit#diagnosticEvidence {{ background:{t['sidebar']}; border:1px solid {t['border']}; padding:14px; }}
-    QSplitter::handle {{ background:transparent; }}
+    QLabel#dialogTitle[compact="true"] {{ font-size:{TYPE['section']}px; }}
+    QLabel#diagnosticNumber[compact="true"] {{ font-size:{TYPE['section']}px; }}
+    QSplitter#diagnosticSplitter::handle {{ background:transparent; }}
     QFrame#settingsShell, QStackedWidget#settingsPanels {{ background:{t['surface']}; border-radius:12px; }}
     QFrame#settingsWorkspace {{ background:{t['background']}; }}
     QFrame#settingsMenu {{ background:transparent; border:0; }}

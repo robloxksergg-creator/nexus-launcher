@@ -57,6 +57,8 @@ class DiagnosticsUITests(unittest.TestCase):
             dialog.resize(700,600);QTest.qWait(100)
             self.assertEqual(dialog.issues_splitter.orientation(), Qt.Orientation.Vertical)
             self.assertFalse(dialog.evidence.visibleRegion().isEmpty())
+            self.assertGreaterEqual(dialog.findings.height(), 108)
+            self.assertFalse(dialog.workspace_eyebrow.isVisible())
             if os.environ.get('NEXUS_DIAGNOSTICS_NARROW_SCREENSHOT'):
                 self.assertTrue(dialog.grab().save(os.environ['NEXUS_DIAGNOSTICS_NARROW_SCREENSHOT']))
             self.assertFalse(dialog.scan.visibleRegion().isEmpty())
