@@ -5,13 +5,15 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import threading
 import time
 import unittest
+from unittest.mock import patch
 import zipfile
 
 from PySide6.QtCore import QTimer
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget
 from nexus_launcher.diagnostic_trial import DiagnosticTrials
 from nexus_launcher.nexus_platform.instance_diagnostics_dialog import InstanceDiagnosticsDialog, TrialReviewDialog
 from nexus_launcher.user_instances import InstanceService, InstalledMod
@@ -95,6 +97,27 @@ class TrialUITests(unittest.TestCase):
         self.assertIn('изменилась',self.dialog.status.text())
         self.assertTrue(self.dialog.scan.isEnabled())
         self.assertEqual({x.id for x in self.service.list()},{self.original.id})
+
+    def test_reparented_library_retains_original_launch_owner(self):
+        from nexus_launcher.instance_ui import InstancePage
+        owner, host = QWidget(), QWidget()
+        owner._launch_lock=threading.Lock();owner.game_process=None
+        host._launch_lock=threading.Lock();host.game_process=None
+        with patch('socket.create_connection',side_effect=AssertionError('NETWORK_FORBIDDEN')):
+            page=InstancePage(self.service,owner)
+            page.setParent(host)
+            self.assertIs(page.window(),host)
+            captured=[]
+            def review(dialog):
+                captured.append(dialog.trials)
+                return 0
+            with patch.object(InstanceDiagnosticsDialog,'exec',autospec=True,side_effect=review):
+                page._open_diagnostics()
+            self.assertEqual(len(captured),1)
+            with captured[0].idle_guard():
+                self.assertTrue(owner._launch_lock.locked())
+                self.assertFalse(host._launch_lock.locked())
+            page.close();owner.close();host.close()
 
 
 if __name__=='__main__':

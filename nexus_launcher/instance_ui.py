@@ -183,6 +183,8 @@ class InstancePage(QWidget):
 
     def __init__(self, service: InstanceService, parent=None):
         super().__init__(parent)
+        # Visual reparenting into PrototypeHost must not change the launch owner.
+        self.launch_owner = parent
         self.service = service
         self.provider = ModrinthProvider()
         self.installer = ModInstaller(service, self.provider)
@@ -763,7 +765,7 @@ class InstancePage(QWidget):
         from nexus_launcher.nexus_platform.instance_diagnostics_dialog import InstanceDiagnosticsDialog
         from nexus_launcher.diagnostic_trial import DiagnosticTrials, launcher_idle
         source_id = self.current.id
-        owner = self.window()
+        owner = self.launch_owner if self.launch_owner is not None else self.window()
         trials = DiagnosticTrials(self.service, source_id, lambda: launcher_idle(owner))
         dialog = InstanceDiagnosticsDialog(self.service.path_for(source_id), self.current.loader, self.current.name, self, trials=trials)
         dialog.exec()
