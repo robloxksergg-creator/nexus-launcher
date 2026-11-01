@@ -1,6 +1,7 @@
 """Owned temporary files only. No game, external account or launch."""
 from contextlib import nullcontext
 import hashlib
+import os
 from pathlib import Path
 import tempfile
 import threading
@@ -115,6 +116,16 @@ class TrialTests(unittest.TestCase):
     def test_invalid_filename_is_refused(self):
         for filename in ('../a.jar','a.txt','/a.jar'):
             with self.assertRaises(ValueError):self.trials.prepare(filename)
+
+    def test_unreadable_world_is_not_silently_omitted(self):
+        walk=os.walk
+        def denied(path, **kwargs):
+            if Path(path).name=='saves':
+                if kwargs.get('onerror'):kwargs['onerror'](PermissionError('synthetic unreadable saves'))
+                return iter(())
+            return walk(path, **kwargs)
+        with patch('nexus_launcher.diagnostic_trial.os.walk',side_effect=denied):
+            with self.assertRaises(PermissionError):self.trials.prepare('a.jar')
 
 
 if __name__=='__main__':

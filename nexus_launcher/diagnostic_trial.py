@@ -84,6 +84,8 @@ def _snapshot(root, cancelled):
     if len(manifest) > 1024 * 1024:
         raise TrialError('Слишком большие метаданные сборки.')
     files, total = [], 0
+    def walk_error(error):
+        raise error
     def add(relative):
         nonlocal total
         _cancel(cancelled)
@@ -99,7 +101,9 @@ def _snapshot(root, cancelled):
         base = checked_path(root, directory)
         if not base.exists():
             continue
-        for folder, dirs, names in os.walk(base, followlinks=False):
+        if not base.is_dir():
+            raise TrialError('Игровая папка заменена файлом.')
+        for folder, dirs, names in os.walk(base, followlinks=False, onerror=walk_error):
             _cancel(cancelled)
             for name in dirs:
                 checked_path(root, (Path(folder)/name).relative_to(root).as_posix())

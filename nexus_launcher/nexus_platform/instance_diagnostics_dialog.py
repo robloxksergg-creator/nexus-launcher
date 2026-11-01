@@ -72,6 +72,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.report = None
         self.trials = trials
         self.pending_plan = None
+        self.review_dialog = None
         self.trial_result = None
         self.selected_instance_id = ''
         self.setWindowTitle('Диагностика · ' + name)
@@ -139,7 +140,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
         layout.addLayout(actions)
 
     def start_scan(self):
-        if self.worker is not None:
+        if self.worker is not None or self.review_dialog is not None:
             return
         self.report = None
         self.findings.clear()
@@ -192,7 +193,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
     def refresh_trial_actions(self):
         row = self.findings.currentRow()
         filename = self.report.findings[row].filename if self.report and 0 <= row < len(self.report.findings) else ''
-        busy = self.worker is not None
+        busy = self.worker is not None or self.review_dialog is not None
         self.prepare_trial.setEnabled(bool(self.trials and filename and not busy and not self.trial_result))
         self.open_trial.setEnabled(not busy)
         self.open_original.setEnabled(not busy)
@@ -225,11 +226,22 @@ class InstanceDiagnosticsDialog(NexusDialog):
 
     def review_trial(self, plan):
         dialog = TrialReviewDialog(plan, self)
-        if dialog.exec():
+        self.review_dialog = dialog
+        dialog.finished.connect(lambda result: self.review_closed(dialog, plan, result))
+        self.refresh_trial_actions()
+        dialog.open()
+
+    def review_closed(self, dialog, plan, result):
+        self.review_dialog = None
+        dialog.deleteLater()
+        if self.closing:
+            return
+        if result == NexusDialog.DialogCode.Accepted:
             self.start_operation(lambda cancelled: self.trials.apply(plan, cancelled), self.copy_created,
                                  'Создаём и проверяем отдельную диагностическую копию…')
         else:
             self.status.setText('Создание копии отменено. Исходные файлы не менялись.')
+            self.refresh_trial_actions()
 
     def copy_created(self, result):
         self.trial_result = result
@@ -255,6 +267,9 @@ class InstanceDiagnosticsDialog(NexusDialog):
             self.review_trial(plan)
 
     def reject(self):
+        if self.review_dialog is not None:
+            self.closing = True
+            self.review_dialog.reject()
         if self.worker is not None:
             self.closing = True
             self.worker.cancel.set()
