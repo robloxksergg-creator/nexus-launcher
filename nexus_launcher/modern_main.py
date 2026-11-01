@@ -205,6 +205,11 @@ class LoginDialog(NexusDialog):
         buttons.addWidget(login)
         root.addLayout(buttons)
 
+    def reject(self):
+        self.password.clear()
+        self.mfa_code.clear()
+        super().reject()
+
     def second_factor(self):
         value = self.mfa_code.text().strip()
         self.mfa_code.clear()

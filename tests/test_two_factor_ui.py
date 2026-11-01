@@ -46,7 +46,8 @@ class TwoFactorTests(unittest.TestCase):
   self.assertEqual(dialog.second_factor(),('', 'abcdef01-'*3+'abcdef01'))
   QTest.qWait(100)
   if os.environ.get('NEXUS_TWO_FACTOR_SCREENSHOT'):self.assertTrue(dialog.grab().save(os.environ['NEXUS_TWO_FACTOR_SCREENSHOT']))
-  dialog.close();parent.close()
+  dialog.password.setText('synthetic');dialog.mfa_code.setText('123456');dialog.reject()
+  self.assertEqual(dialog.password.text(),'');self.assertEqual(dialog.mfa_code.text(),'');parent.close()
  def test_auth_owner_forwards_factor_without_leaking_error(self):
   calls=[]
   class Client:
