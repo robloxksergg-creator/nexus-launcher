@@ -42,7 +42,9 @@ class TrialUITests(unittest.TestCase):
 
     def wait_idle(self):
         deadline=time.monotonic()+20
-        while (self.dialog.worker is not None or self.dialog.review_dialog is not None) and time.monotonic()<deadline:QTest.qWait(20)
+        while (self.dialog.worker is not None or self.dialog.review_dialog is not None) and time.monotonic()<deadline:
+            self.app.processEvents()
+            time.sleep(.01)
         if self.dialog.worker is not None:
             import faulthandler
             faulthandler.dump_traceback()

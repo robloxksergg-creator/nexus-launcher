@@ -27,7 +27,8 @@ class DiagnosticsUITests(unittest.TestCase):
     def wait(self, dialog):
         deadline=time.monotonic()+15
         while dialog.worker is not None and time.monotonic()<deadline:
-            QTest.qWait(20)
+            self.app.processEvents()
+            time.sleep(.01)
         self.assertIsNone(dialog.worker,'Worker did not finish')
 
     def test_report_selection_dependency_tree_refresh_and_narrow_window(self):
