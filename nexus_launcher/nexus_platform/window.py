@@ -230,6 +230,7 @@ class PlatformLauncher(CoreLauncher):
         self.logs_page.open_folder_requested.connect(self._open_logs_folder)
         self.mods_page.optional_requested.connect(self._optional_mods)
         self.mods_page.open_folder_requested.connect(self._open_mods_folder)
+        self.mods_page.diagnostics_requested.connect(self._open_instance_diagnostics)
         self.status_bar.java.setText(detect_java_label(self.config.get("java_path", "")))
         for world_id, item in self.remote_world_state.items():
             self._set_remote_status(world_id, item)
@@ -667,6 +668,11 @@ class PlatformLauncher(CoreLauncher):
         folder = self._instance_dir() / "mods"
         folder.mkdir(parents=True, exist_ok=True)
         open_in_file_manager(folder)
+
+    def _open_instance_diagnostics(self):
+        from .instance_diagnostics_dialog import InstanceDiagnosticsDialog
+        dialog = InstanceDiagnosticsDialog(self._instance_dir(), self.current_server.loader, self.current_server.name, self)
+        dialog.exec()
 
     def _show_logs(self):
         self.logs_page.set_instance(self._instance_dir())

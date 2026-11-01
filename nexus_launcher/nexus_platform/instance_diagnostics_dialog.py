@@ -55,6 +55,8 @@ class InstanceDiagnosticsDialog(NexusDialog):
         layout.addWidget(tabs, 1)
         issues = QSplitter(Qt.Orientation.Horizontal)
         self.findings = QListWidget()
+        self.findings.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.findings.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.findings.setAccessibleName('Результаты диагностики')
         self.findings.currentRowChanged.connect(self.show_finding)
         self.evidence = QPlainTextEdit()
@@ -105,6 +107,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
         levels = {'error': 'Ошибка', 'warning': 'Внимание', 'info': 'Сведения'}
         for finding in report.findings:
             self.findings.addItem(levels[finding.level] + ' · ' + finding.title)
+            self.findings.item(self.findings.count()-1).setToolTip(redact(finding.title))
         owners = {}
         for mod in report.mods:
             for identifier in mod.ids:

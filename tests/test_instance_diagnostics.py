@@ -128,6 +128,14 @@ side="SERVER"
         after={p.relative_to(self.root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in self.root.rglob('*') if p.is_file()}
         self.assertEqual(before,after)
 
+    def test_unknown_loader_does_not_confirm_missing_runtime(self):
+        self.jar('a.jar',{'id':'a','depends':{'fabricloader':'*'}})
+        self.assertIn('UNRESOLVED_DEPENDENCY',self.codes(scan_instance(self.root,'quilt')))
+
+    def test_missing_instance_is_not_an_empty_healthy_pack(self):
+        with self.assertRaises(FileNotFoundError):
+            scan_instance(self.root/'absent','fabric')
+
 
 if __name__=='__main__':
     unittest.main()

@@ -212,7 +212,7 @@ def scan_instance(root, loader, cancelled=lambda: False):
                 implicit = {'fabric': {'fabricloader'}, 'forge': {'forge'}, 'neoforge': {'neoforge'}}.get(loader, set())
                 if identifier in BUILTINS | implicit or identifier in owners:
                     continue
-                code = 'MISSING_DEPENDENCY' if complete and not nested else 'UNRESOLVED_DEPENDENCY'
+                code = 'MISSING_DEPENDENCY' if complete and not nested and loader in {'fabric', 'forge', 'neoforge', 'vanilla'} else 'UNRESOLVED_DEPENDENCY'
                 findings.append(Finding('warning', code, 'Не найдена зависимость: ' + identifier,
                     'Требует ' + mod.filename + '; условие: ' + expression + ('. Вложенные/непрочитанные JAR не позволяют подтвердить отсутствие.' if code == 'UNRESOLVED_DEPENDENCY' else '. Не найдена среди распознанных включённых модов.'),
                     (mod.filename, identifier, expression), mod.filename))

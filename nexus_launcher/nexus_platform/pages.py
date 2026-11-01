@@ -1015,6 +1015,7 @@ class LogsPage(QWidget):
 class ModsPage(QWidget):
     optional_requested = Signal()
     open_folder_requested = Signal()
+    diagnostics_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1034,8 +1035,11 @@ class ModsPage(QWidget):
         optional.clicked.connect(self.optional_requested)
         folder = QPushButton("Открыть папку модов")
         folder.clicked.connect(self.open_folder_requested)
+        diagnostics = QPushButton("Диагностика сборки")
+        diagnostics.clicked.connect(self.diagnostics_requested)
         buttons.addWidget(optional)
         buttons.addWidget(folder)
+        buttons.addWidget(diagnostics)
         buttons.addStretch()
         root.addLayout(buttons)
 
