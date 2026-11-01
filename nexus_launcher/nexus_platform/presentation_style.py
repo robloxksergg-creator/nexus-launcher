@@ -44,7 +44,10 @@ def stylesheet():
     QPushButton#worldTile[selected="true"], QPushButton#filterChip[dataActive="true"] {{ background:{t['wash']}; border-color:{t['accent']}; }}
     QFrame#profileCover {{ background:{t['wash']}; border:1px solid {t['border']}; border-radius:14px; }}
     QLineEdit, QComboBox, QPlainTextEdit, QSpinBox, QDoubleSpinBox {{ background:{t['sidebar']}; border:1px solid {t['border']}; border-radius:8px; padding:10px; selection-background-color:{t['wash']}; }}
-    QComboBox QAbstractItemView, QListWidget {{ background:{t['sidebar']}; border:1px solid {t['border']}; selection-background-color:{t['wash']}; }}
+    QComboBox QAbstractItemView, QListWidget, QTreeWidget {{ background:{t['sidebar']}; color:{t['text']}; border:1px solid {t['border']}; selection-background-color:{t['wash']}; }}
+    QTreeWidget::item {{ padding:6px; }}
+    QTreeWidget::item:selected {{ background:{t['wash']}; color:{t['accent']}; }}
+    QTreeWidget QHeaderView::section {{ background:{t['surface']}; color:{t['text']}; border:0; border-bottom:1px solid {t['border']}; padding:8px; }}
     QListWidget::item {{ padding:10px; border-radius:6px; }}
     QListWidget::item:selected {{ background:{t['wash']}; color:{t['accent']}; }}
     QFrame#settingsShell, QStackedWidget#settingsPanels {{ background:{t['surface']}; border-radius:12px; }}

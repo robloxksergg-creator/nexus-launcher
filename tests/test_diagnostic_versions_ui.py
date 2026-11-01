@@ -9,6 +9,7 @@ import zipfile
 from PySide6.QtWidgets import QApplication, QTabWidget
 from PySide6.QtTest import QTest
 from nexus_launcher.nexus_platform.instance_diagnostics_dialog import InstanceDiagnosticsDialog
+from nexus_launcher.nexus_platform.theme_tokens import TOKENS
 
 
 class VersionUITests(unittest.TestCase):
@@ -49,6 +50,8 @@ class VersionUITests(unittest.TestCase):
         d.findChild(QTabWidget).setCurrentIndex(1)
         node.setExpanded(True)
         QTest.qWait(100)
+        rendered=d.dependencies.viewport().grab().toImage()
+        self.assertEqual(rendered.pixelColor(3,rendered.height()-3).name(),TOKENS['sidebar'])
         if os.environ.get('NEXUS_VERSION_SCREENSHOT'):
             self.assertTrue(d.grab().save(os.environ['NEXUS_VERSION_SCREENSHOT']))
         d.resize(700,500);QTest.qWait(50)
