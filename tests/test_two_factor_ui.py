@@ -1,10 +1,19 @@
 """Synthetic second-factor checks; no live account or network."""
-import io,json,os,time,unittest,urllib.error
+import ast,io,json,os,time,unittest,urllib.error
+from pathlib import Path
 from unittest.mock import patch
-from PySide6.QtWidgets import QApplication,QWidget
+from PySide6.QtWidgets import QApplication,QWidget,QVBoxLayout,QHBoxLayout,QLabel,QLineEdit,QCheckBox,QPushButton
 from PySide6.QtTest import QTest
 from nexus_launcher.nexus_account import NexusAccountClient,AccountError,SessionRejected
-from nexus_launcher.nexus_platform.next_shell import NexusLogin
+from nexus_launcher.themed_dialog import NexusDialog
+# Execute the actual two form class bodies without importing the unrelated Studio
+# Markdown/editor stack or starting the application shell.
+namespace={name:value for name,value in globals().copy().items()}
+for source_name,class_name in [('nexus_launcher/modern_main.py','LoginDialog'),('nexus_launcher/nexus_platform/next_shell.py','NexusLogin')]:
+ tree=ast.parse(Path(source_name).read_text(encoding='utf-8'))
+ body=next(node for node in tree.body if isinstance(node,ast.ClassDef) and node.name==class_name)
+ exec(compile(ast.Module(body=[body],type_ignores=[]),source_name,'exec'),namespace)
+NexusLogin=namespace['NexusLogin']
 from nexus_launcher.nexus_platform.auth_state import AuthState
 from nexus_launcher.nexus_platform.presentation_style import stylesheet
 class TwoFactorTests(unittest.TestCase):
