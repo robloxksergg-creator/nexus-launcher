@@ -50,6 +50,8 @@ def stylesheet():
     QTreeWidget QHeaderView::section {{ background:{t['surface']}; color:{t['text']}; border:0; border-bottom:1px solid {t['border']}; padding:8px; }}
     QListWidget::item {{ padding:10px; border-radius:6px; }}
     QListWidget::item:selected {{ background:{t['wash']}; color:{t['accent']}; }}
+    QFrame#diagnosticEntry, QFrame#diagnosticResult {{ background:{t['surface']}; border:1px solid {t['border']}; border-radius:{RADIUS['surface']}px; }}
+    QLabel#diagnosticResultTitle {{ color:{t['success']}; font-size:19px; font-weight:650; }}
     QFrame#diagnosticMetric {{ background:{t['surface']}; border:1px solid {t['border']}; border-radius:{RADIUS['surface']}px; }}
     QLabel#diagnosticNumber {{ font-family:'Bahnschrift','Segoe UI'; font-size:30px; font-weight:650; color:{t['accent']}; }}
     QLabel#diagnosticNumber[tone="warning"] {{ color:{t['warning']}; }}

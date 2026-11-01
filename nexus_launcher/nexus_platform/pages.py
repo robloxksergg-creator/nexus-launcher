@@ -1024,22 +1024,29 @@ class ModsPage(QWidget):
         title = QLabel("МОДЫ")
         title.setObjectName("pageTitle")
         root.addWidget(title)
+        from .diagnostic_widgets import DiagnosticEntryCard
+        self.diagnostics_card = DiagnosticEntryCard(managed=True)
+        self.diagnostics_card.requested.connect(self.diagnostics_requested)
+        root.addWidget(self.diagnostics_card)
+        self.inventory_status = QLabel('Выберите сборку, чтобы увидеть установленные моды.')
+        self.inventory_status.setObjectName('muted')
+        self.inventory_status.setWordWrap(True)
+        root.addWidget(self.inventory_status)
         self.search = QLineEdit()
+        self.search.setClearButtonEnabled(True)
+        self.search.setAccessibleName('Поиск по установленным модам')
         self.search.setPlaceholderText("Поиск по установленным модам")
         self.search.textChanged.connect(self._filter)
         root.addWidget(self.search)
         self.list = QListWidget()
         root.addWidget(self.list, 1)
         buttons = QHBoxLayout()
-        optional = QPushButton("Optional Mods")
+        optional = QPushButton("Дополнительные моды")
         optional.clicked.connect(self.optional_requested)
         folder = QPushButton("Открыть папку модов")
         folder.clicked.connect(self.open_folder_requested)
-        diagnostics = QPushButton("Диагностика сборки")
-        diagnostics.clicked.connect(self.diagnostics_requested)
         buttons.addWidget(optional)
         buttons.addWidget(folder)
-        buttons.addWidget(diagnostics)
         buttons.addStretch()
         root.addLayout(buttons)
 
@@ -1048,13 +1055,18 @@ class ModsPage(QWidget):
         optional_names = {name.lower() for name in (optional_names or set())}
         mods = root / "mods"
         disabled = root / "disabled_mods"
+        enabled_count = disabled_count = 0
         for folder, enabled in ((mods, True), (disabled, False)):
             if not folder.is_dir():
                 continue
             for path in sorted(folder.glob("*.jar"), key=lambda item: item.name.lower()):
-                kind = "OPTIONAL" if path.name.lower() in optional_names else "REQUIRED / MANAGED"
-                item = f"{'●' if enabled else '○'}  {path.name}    ·    {kind}"
+                enabled_count += int(enabled)
+                disabled_count += int(not enabled)
+                kind = "Дополнительный" if path.name.lower() in optional_names else "Управляемый"
+                item = f"{path.name}\n{'Включён' if enabled else 'Отключён'} · {kind}"
                 self.list.addItem(item)
+        self.inventory_status.setText(f'Включено: {enabled_count} · Отключено: {disabled_count}' if self.list.count() else 'Модов пока нет. Папка сборки пуста или ещё не установлена.')
+        self._filter(self.search.text())
 
     def _filter(self, text: str) -> None:
         query = text.strip().lower()

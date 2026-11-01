@@ -199,6 +199,27 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.dependencies.setColumnWidth(2, 180)
         self.dependencies.setAccessibleName('Объявленные зависимости включённых модов')
         tabs.addTab(self.dependencies, 'Зависимости')
+        nested_page = QWidget()
+        nested_layout = QVBoxLayout(nested_page)
+        nested_layout.setContentsMargins(0, 8, 0, 0)
+        self.nested_status = QLabel('После проверки здесь появятся найденные вложения и их источники.')
+        self.nested_status.setObjectName('muted')
+        self.nested_status.setWordWrap(True)
+        nested_layout.addWidget(self.nested_status)
+        self.nested_tree = QTreeWidget()
+        self.nested_tree.setHeaderLabels(['Статус', 'Архив и вложение', 'Объявление'])
+        self.nested_tree.setRootIsDecorated(False)
+        self.nested_tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.nested_tree.setColumnWidth(0, 150)
+        self.nested_tree.setColumnWidth(2, 200)
+        self.nested_tree.setAccessibleName('Вложенные JAR — кандидаты, не подтверждённые загрузки')
+        nested_layout.addWidget(self.nested_tree, 1)
+        self.nested_source = QPushButton('Показать источник')
+        self.nested_source.setEnabled(False)
+        self.nested_source.clicked.connect(self.show_nested_source)
+        self.nested_tree.currentItemChanged.connect(lambda current, previous: self.nested_source.setEnabled(current is not None))
+        nested_layout.addWidget(self.nested_source, 0, Qt.AlignmentFlag.AlignRight)
+        tabs.addTab(nested_page, 'Вложенные JAR')
         trial_actions = QHBoxLayout()
         self.prepare_trial = QPushButton('Создать пробную копию…')
         self.prepare_trial.setToolTip('Подготовить копию без мода из выбранного результата. Изменение требует подтверждения.')
@@ -212,10 +233,29 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.open_original.hide()
         self.open_trial.clicked.connect(lambda: self.choose_instance(self.trial_result.trial_id))
         self.open_original.clicked.connect(lambda: self.choose_instance(self.trial_result.source_id))
-        trial_actions.addWidget(self.open_trial)
-        trial_actions.addWidget(self.open_original)
         trial_actions.addStretch()
         layout.addLayout(trial_actions)
+        self.result_panel = QFrame()
+        self.result_panel.setObjectName('diagnosticResult')
+        result_layout = QVBoxLayout(self.result_panel)
+        result_layout.setContentsMargins(16, 12, 16, 12)
+        self.result_title = QLabel('Пробная копия создана')
+        self.result_title.setObjectName('diagnosticResultTitle')
+        self.result_title.setTextFormat(Qt.TextFormat.PlainText)
+        self.result_title.setWordWrap(True)
+        result_layout.addWidget(self.result_title)
+        result_copy = QLabel('Мод отключён только в копии. Игра не запускалась; исправление пока не подтверждено. Сохранения копии не объединяются с исходными.')
+        result_copy.setObjectName('muted')
+        result_copy.setWordWrap(True)
+        result_layout.addWidget(result_copy)
+        result_actions = QHBoxLayout()
+        self.open_trial.setObjectName('primaryAction')
+        result_actions.addWidget(self.open_trial)
+        result_actions.addWidget(self.open_original)
+        result_actions.addStretch()
+        result_layout.addLayout(result_actions)
+        self.result_panel.hide()
+        layout.addWidget(self.result_panel)
         actions = QHBoxLayout()
         self.scan = QPushButton('Проверить сборку')
         self.scan.setObjectName('primaryAction')
@@ -256,6 +296,8 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.report = None
         self.findings.clear()
         self.dependencies.clear()
+        self.nested_tree.clear()
+        self.nested_status.setText('Читаем объявления вложенных JAR…')
         self.evidence.clear()
         self.detail_title.setText('Читаем сборку…')
         for value in self.summary_values:
@@ -289,6 +331,20 @@ class InstanceDiagnosticsDialog(NexusDialog):
             item.setForeground(QColor(TOKENS[{'error':'danger', 'warning':'warning', 'info':'text'}[finding.level]]))
             item.setToolTip(redact(finding.title))
             self.findings.addItem(item)
+        labels = {'NESTED_CANDIDATE': 'Кандидат', 'NESTED_UNKNOWN': 'Не проверено', 'NESTED_LIMIT': 'Лимит чтения'}
+        self.nested_tree.clear()
+        for index, finding in enumerate(report.findings):
+            if finding.code not in labels:
+                continue
+            item = QTreeWidgetItem([labels[finding.code], ' · '.join(finding.evidence), finding.detail])
+            item.setData(0, Qt.ItemDataRole.UserRole, index)
+            item.setToolTip(1, redact(' · '.join(finding.evidence)))
+            item.setToolTip(2, redact(finding.detail))
+            self.nested_tree.addTopLevelItem(item)
+        nested_count = self.nested_tree.topLevelItemCount()
+        self.nested_status.setText(f'Записей: {nested_count}. Объявление внутри архива не подтверждает выбор и загрузку мода.' if nested_count else 'Сведений о вложенных JAR нет. Это не доказывает их отсутствие в непрочитанных архивах.')
+        if nested_count:
+            self.nested_tree.setCurrentItem(self.nested_tree.topLevelItem(0))
         owners = {}
         for mod in report.mods:
             for identifier in mod.ids:
@@ -314,6 +370,13 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.dependencies.setColumnWidth(0,240)
         if self.findings.count():
             self.findings.setCurrentRow(0)
+
+    def show_nested_source(self):
+        item = self.nested_tree.currentItem()
+        if item is not None and self.report is not None:
+            self.tabs.setCurrentIndex(0)
+            self.findings.setCurrentRow(item.data(0, Qt.ItemDataRole.UserRole))
+            self.findings.setFocus()
 
     def show_finding(self, row):
         if self.report is None or not 0 <= row < len(self.report.findings):
@@ -382,6 +445,8 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.trial_result = result
         self.prepare_trial.hide()
         self.status.setText('Копия создана: ' + result.trial_name + '. Выбранный мод отключён только в ней. Игра не запускалась; исправление ещё не подтверждено.')
+        self.result_title.setText('Копия создана: ' + result.trial_name)
+        self.result_panel.show()
         self.open_trial.show()
         self.open_original.show()
 

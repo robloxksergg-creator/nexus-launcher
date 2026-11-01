@@ -1,7 +1,7 @@
 name: Instance diagnostics read-only verification
 'on':
   push:
-    branches: [diagnostics/verify-center, diagnostics/verify-trial, diagnostics/verify-versions, diagnostics/verify-design]
+    branches: [diagnostics/verify-center, diagnostics/verify-trial, diagnostics/verify-versions, diagnostics/verify-design, diagnostics/verify-workspaces]
 permissions:
   contents: read
 jobs:
@@ -50,6 +50,13 @@ jobs:
         run: |
           python -B -m unittest discover -s tests -p test_instance_diagnostics_ui.py -v
           exit $LASTEXITCODE
+      - name: Related workspace presentation and navigation
+        env:
+          NEXUS_MODS_WORKSPACE_SCREENSHOT: ${{ runner.temp }}/mods-workspace.png
+          NEXUS_NESTED_WORKSPACE_SCREENSHOT: ${{ runner.temp }}/nested-workspace.png
+        run: |
+          python -B -m unittest discover -s tests -p test_diagnostic_workspace_ui.py -v
+          exit $LASTEXITCODE
       - name: Trial copy integrity, stale plan, cleanup and launch exclusion
         run: |
           python -B -m unittest discover -s tests -p test_diagnostic_trial.py -v
@@ -72,3 +79,5 @@ jobs:
             ${{ runner.temp }}/trial-result.png
             ${{ runner.temp }}/dependency-versions.png
             ${{ runner.temp }}/diagnostics-narrow.png
+            ${{ runner.temp }}/mods-workspace.png
+            ${{ runner.temp }}/nested-workspace.png

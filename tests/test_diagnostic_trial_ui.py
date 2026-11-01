@@ -76,6 +76,8 @@ class TrialUITests(unittest.TestCase):
         self.respond(True);self.dialog.prepare_trial.click();self.wait_idle()
         result=self.dialog.trial_result
         self.assertIsNotNone(result)
+        self.assertTrue(self.dialog.result_panel.isVisible())
+        self.assertIn(result.trial_name, self.dialog.result_title.text())
         self.assertTrue(self.dialog.open_trial.isEnabled())
         target=self.service.path_for(result.trial_id)
         self.assertTrue((target/'disabled_mods/example.jar').exists())
