@@ -1,4 +1,5 @@
 import os
+import time
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -20,6 +21,20 @@ def keep_application_alive():
     yield app
 
 
+def wait_until(predicate, timeout=3):
+    """Native Cocoa/window-manager transitions need event delivery, not one tick."""
+    deadline = time.monotonic() + timeout
+    while not predicate() and time.monotonic() < deadline:
+        QTest.qWait(10)
+    assert predicate()
+
+
+def activate(window):
+    window.raise_()
+    window.activateWindow()
+    wait_until(window.isActiveWindow)
+
+
 def test_restore_repeated_cycles_and_minimize():
     app = QApplication.instance() or QApplication([])
     window = QMainWindow()
@@ -29,21 +44,18 @@ def test_restore_repeated_cycles_and_minimize():
     window.setCentralWidget(title)
     window.show()
     try:
+        activate(window)
         for _ in range(3):
             title.maximize.click()
-            app.processEvents()
-            assert window.isMaximized()
+            wait_until(window.isMaximized)
             title.maximize.click()
-            QTest.qWait(120)
-            assert not window.isMaximized()
+            wait_until(lambda: not window.isMaximized())
             assert not window.isFullScreen()
             assert window.width() < window.screen().availableGeometry().width()
         title.minimize.click()
-        app.processEvents()
-        assert window.isMinimized()
+        wait_until(window.isMinimized)
         window.showNormal()
-        app.processEvents()
-        assert not window.isMinimized()
+        wait_until(lambda: not window.isMinimized())
     finally:
         window.close()
 
@@ -67,6 +79,7 @@ def test_title_controls_full_hit_area_keyboard_and_close():
     position_resize_edges(window)
     title = window.title_bar
     try:
+        activate(window)
         for control in (title.minimize, title.maximize, title.close_button):
             assert control.accessibleName() and control.toolTip()
             for point in (
@@ -76,27 +89,27 @@ def test_title_controls_full_hit_area_keyboard_and_close():
             ):
                 assert app.widgetAt(control.mapToGlobal(point)) is control
         QTest.mouseClick(title.minimize, Qt.LeftButton, pos=QPoint(2, 2))
-        app.processEvents()
-        assert window.isMinimized()
+        wait_until(window.isMinimized)
         window.showNormal()
-        app.processEvents()
-        title.maximize.setFocus(Qt.TabFocusReason)
+        wait_until(lambda: not window.isMinimized())
+        activate(window)
+        title.minimize.setFocus(Qt.TabFocusReason)
+        wait_until(title.minimize.hasFocus)
+        QTest.keyClick(title.minimize, Qt.Key_Tab)
+        wait_until(lambda: title.maximize.hasFocus() and title.maximize.keyboard_focus)
         QTest.keyClick(title.maximize, Qt.Key_Return)
-        app.processEvents()
-        assert window.isMaximized()
+        wait_until(window.isMaximized)
         title.sync()
         assert title.maximize.symbol == "restore"
         assert title.maximize.property("windowExpanded")
         assert title.maximize.keyboard_focus
         QTest.keyClick(title.maximize, Qt.Key_Space)
-        QTest.qWait(120)
-        assert not window.isMaximized()
+        wait_until(lambda: not window.isMaximized())
         title.sync()
         position_resize_edges(window)
         title.close_button.setFocus(Qt.TabFocusReason)
         QTest.keyClick(title.close_button, Qt.Key_Return)
-        app.processEvents()
-        assert not window.isVisible()
+        wait_until(lambda: not window.isVisible())
     finally:
         window.close()
 
@@ -112,19 +125,20 @@ def test_restore_keeps_user_geometry_and_button_double_click_does_not_bubble():
     app.processEvents()
     before = window.geometry()
     try:
+        activate(window)
         title.maximize.click()
-        app.processEvents()
-        assert window.isMaximized()
+        wait_until(window.isMaximized)
         QTest.mouseDClick(title.maximize, Qt.LeftButton)
         app.processEvents()
         assert window.isMaximized()
         title.maximize.click()
-        QTest.qWait(150)
-        assert not window.isMaximized()
+        wait_until(lambda: not window.isMaximized())
+        wait_until(lambda: window.geometry() == before)
         assert window.geometry() == before
         title.maximize.click()
-        app.processEvents()
+        wait_until(window.isMaximized)
         title.maximize.click()
+        wait_until(lambda: not window.isMaximized())
         window.move(180, 130)
         moved = window.pos()
         QTest.qWait(150)
@@ -133,9 +147,8 @@ def test_restore_keeps_user_geometry_and_button_double_click_does_not_bubble():
         app.processEvents()
         changed = window.geometry()
         title.maximize.click()
-        app.processEvents()
+        wait_until(window.isMaximized)
         title.maximize.click()
-        QTest.qWait(150)
-        assert window.geometry() == changed
+        wait_until(lambda: not window.isMaximized() and window.geometry() == changed)
     finally:
         window.close()
