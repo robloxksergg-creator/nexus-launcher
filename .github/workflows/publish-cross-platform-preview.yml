@@ -1,0 +1,83 @@
+name: Publish coordinated 1.0.4 preview after native acceptance
+'on':
+  push:
+    branches: [release/publish-cross-platform-1.0.4]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: nexus-publish-cross-platform-1.0.4
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: robloxksergg-creator/nexus-launcher
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Verify all source runs and pinned artifact provenance
+        run: |
+          python - <<'PY'
+          import json,os,urllib.request
+          root='https://api.github.com/repos/'+os.environ['GH_REPO']
+          def get(path):
+            req=urllib.request.Request(root+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+            with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          rows=[(41447223497,13144235043,'871990f93b88522af8cbcd4cbb41b517efcd477a2ab615cde9fc4b0e7c9a9651'),(41447223776,13141704620,'81bbacba5076ed50d16f936d44748614852be957abf7e03d3e6b0efc01091e35'),(41447223853,13143576951,'b7465752682ed47d7102579d06f26360165a1fb4635e72baf4c30ac1098334fb')]
+          for run_id,artifact_id,sha in rows:
+            run=get('/actions/runs/'+str(run_id));assert run['status']=='completed' and run['conclusion']=='success' and run['head_sha']=='ca1329a019f1a0aad2c620f88579d6a7b396a3c1'
+            a=get('/actions/artifacts/'+str(artifact_id));assert not a['expired'] and a['workflow_run']['id']==run_id and a['digest']=='sha256:'+sha
+          print('Three successful native runs and exact artifact identities confirmed')
+          PY
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '13144235043'
+          run-id: 41447223497
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/inputs/windows
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '13141704620'
+          run-id: 41447223776
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/inputs/linux
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '13143576951'
+          run-id: 41447223853
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/inputs/macos
+      - name: Verify packages, offline signature and acceptance; prepare release
+        run: |
+          python -m pip install --disable-pip-version-check cryptography==50.0.1
+          python -B packaging/prepare_cross_platform_release.py --input "$RUNNER_TEMP/inputs" --output "$RUNNER_TEMP/release" --approval packaging/releases/1.0.4/approval.json --notes packaging/releases/1.0.4/RELEASE-NOTES.md --acceptance packaging/releases/1.0.4/windows-acceptance.json
+      - name: Publish all platform assets under one preview release
+        run: |
+          if gh release view v1.0.4-preview.1 >/dev/null 2>&1; then echo 'Release already exists; refusing to overwrite'; exit 1; fi
+          gh release create v1.0.4-preview.1 --target ca1329a019f1a0aad2c620f88579d6a7b396a3c1 --title 'NEXUS Launcher 1.0.4 — Diagnostics Preview' --notes-file "$RUNNER_TEMP/release/RELEASE-NOTES.md" --draft --prerelease "$RUNNER_TEMP/release/"*
+          gh release edit v1.0.4-preview.1 --draft=false --prerelease --latest=false
+      - name: Verify public package links before switching signed update feed
+        run: |
+          for name in NEXUS-Setup.exe NEXUS-Managed-1.0.4-Windows-x64.zip NEXUS-1.0.4-Linux-x64.tar.gz NEXUS-1.0.4-macOS-arm64.zip portable-envelope.json; do
+            curl --fail --silent --show-error --head --location --max-time 60 "https://github.com/$GH_REPO/releases/download/v1.0.4-preview.1/$name" >/dev/null
+          done
+          mkdir "$RUNNER_TEMP/previous-feed"
+          gh release download updates-preview --pattern portable-envelope.json --dir "$RUNNER_TEMP/previous-feed"
+          gh release upload updates-preview "$RUNNER_TEMP/release/portable-envelope.json" --clobber
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: nexus-1.0.4-publication-receipts
+          retention-days: 5
+          path: |
+            ${{ runner.temp }}/previous-feed/portable-envelope.json
+            ${{ runner.temp }}/release/SHA256SUMS.txt
+            ${{ runner.temp }}/release/windows-update-acceptance.json

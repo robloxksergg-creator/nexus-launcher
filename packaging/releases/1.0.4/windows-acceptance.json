@@ -1,0 +1,14 @@
+{
+  "versions": [
+    {
+      "version": "1.0.3",
+      "native_readiness": "PASS"
+    },
+    {
+      "version": "1.0.4",
+      "native_readiness": "PASS"
+    }
+  ],
+  "user_data_preserved": true,
+  "scope": "Real Windows processes; local signed fixtures, no live network feed"
+}
