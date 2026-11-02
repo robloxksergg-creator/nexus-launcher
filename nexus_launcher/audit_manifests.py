@@ -42,6 +42,9 @@ def audit(data_root: Path, output: Path):
                     server['id'], server['name'], server.get('address', ''),
                     manifest_url=server.get('manifest_url', ''),
                     local_pack_path=server.get('local_pack_path', ''),
+                    minecraft_version=server.get('minecraft_version', '1.21.1'),
+                    loader=server.get('loader', 'vanilla'),
+                    loader_version=server.get('loader_version', ''),
                 )
     for server in servers.values():
         row = {'server': server.id, 'kind': 'pack-manifest'}
@@ -52,8 +55,11 @@ def audit(data_root: Path, output: Path):
                 if release is None:
                     row['status'] = 'unavailable'
                 else:
+                    from dataclasses import asdict
+                    from nexus_launcher.server_pack_review import review
                     row.update(status='valid', version=release.version, files=len(release.files),
-                               minimum_launcher_version=release.minimum_launcher_version)
+                               minimum_launcher_version=release.minimum_launcher_version,
+                               package_review=asdict(review(server, release)))
             elif server.local_pack_path:
                 row['path'] = server.local_pack_path
                 archive = root / 'assets' / server.local_pack_path

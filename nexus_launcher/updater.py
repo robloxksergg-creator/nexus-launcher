@@ -51,6 +51,31 @@ TRUSTED_DOWNLOAD_HOSTS = {
 }
 STAGING_DOWNLOAD_HOST = "nexusmc-control-plane-staging.robloxksergg.workers.dev"
 
+# Pack content is not an OS installer. JAR/KubeJS still require publisher review;
+# this denylist is a narrow admission boundary, not a malware scanner/sandbox.
+BLOCKED_PACK_SUFFIXES = {'.exe', '.com', '.scr', '.msi', '.msp', '.dll', '.so',
+                         '.dylib', '.bat', '.cmd', '.ps1', '.psm1', '.vbs', '.vbe',
+                         '.sh', '.bash', '.zsh', '.desktop', '.lnk', '.url', '.reg'}
+
+
+def validate_pack_content_path(path: str) -> None:
+    parts = relative_parts(path)
+    if parts[0] not in ALLOWED_ROOTS or (parts[0] == 'nexus-rc-version.txt' and len(parts) != 1):
+        raise ValueError('Файл находится вне разрешённого содержимого сборки')
+    # Include versioned Unix library names, e.g. libexample.so.1.
+    lower = parts[-1].casefold()
+    if PurePosixPath(lower).suffix in BLOCKED_PACK_SUFFIXES or '.so.' in lower:
+        raise ValueError('Пакет содержит запрещённый системный исполняемый файл')
+
+
+def _unique_manifest_fields(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('Повторяющееся поле JSON в manifest')
+        result[key] = value
+    return result
+
 
 def trusted_download_hosts() -> set[str]:
     hosts = set(TRUSTED_DOWNLOAD_HOSTS)
@@ -195,7 +220,9 @@ def fetch_manifest(url: str) -> PackRelease | None:
                 raw = response.read(1024 * 1024 + 1)
                 if len(raw) > 1024 * 1024:
                     raise ValueError("Манифест слишком большой")
-                payload = json.loads(raw)
+                payload = json.loads(raw, object_pairs_hook=_unique_manifest_fields)
+                if not isinstance(payload, dict):
+                    raise ValueError('Manifest должен быть JSON-объектом')
             break
         except (OSError, urllib.error.URLError, TimeoutError) as error:
             last_error = error
@@ -216,7 +243,7 @@ def fetch_manifest(url: str) -> PackRelease | None:
         if safe is None or safe.as_posix() != path.lstrip("/"):
             raise ValueError(f"Недопустимый путь файла: {path}")
         normalized_path = safe.as_posix()
-        relative_parts(normalized_path)
+        validate_pack_content_path(normalized_path)
         if normalized_path.casefold() in seen_paths:
             raise ValueError(f"Повторяющийся путь в manifest: {normalized_path}")
         seen_paths.add(normalized_path.casefold())
@@ -224,6 +251,7 @@ def fetch_manifest(url: str) -> PackRelease | None:
         if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
             raise ValueError(f"Некорректный SHA-256: {path}")
         download_url = str(item.get("url", ""))
+        origin(download_url)
         download_parts = urllib.parse.urlparse(download_url)
         if download_parts.scheme != "https" or not download_parts.hostname:
             raise ValueError(f"Файл должен скачиваться по HTTPS: {path}")
@@ -311,6 +339,7 @@ def fetch_manifest(url: str) -> PackRelease | None:
     if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
         raise ValueError("В манифесте некорректный SHA-256")
     download_url = str(payload["url"])
+    origin(download_url)
     if not download_url.startswith("https://"):
         raise ValueError("Сборка должна скачиваться только по HTTPS")
     return PackRelease(str(payload["version"]), download_url, digest, str(payload.get("changelog", "")), server)
@@ -488,12 +517,17 @@ class ModpackUpdater:
     def apply(self, archive_path: Path, release: PackRelease) -> None:
         self._read_state()  # Reject a corrupt inventory before any mutation.
         self.log(f"Устанавливаю сборку {release.version}…")
-        self.game_dir.mkdir(parents=True, exist_ok=True)
         managed_files: dict[str, str] = {}
         optional_mods: set[str] = set()
         with tempfile.TemporaryDirectory(prefix="nexus-update-") as temporary_name:
             staging = Path(temporary_name)
             with zipfile.ZipFile(archive_path) as archive:
+                # Check the same opened ZIP later used for extraction, not a
+                # preliminary path that would be reopened after validation.
+                for member in archive.infolist():
+                    safe = _safe_member(member.filename)
+                    if safe and not member.is_dir() and safe.parts[0] in ALLOWED_ROOTS:
+                        validate_pack_content_path(safe.as_posix())
                 ensure_space(self.game_dir, 2 * validate_archive(archive))
                 validate_paths(
                     self.game_dir,
@@ -509,6 +543,7 @@ class ModpackUpdater:
                 total_unpacked = sum(member.file_size for member in archive.infolist())
                 if total_unpacked > 3 * MAX_PACK_BYTES:
                     raise ValueError("Распакованный архив слишком большой")
+                self.game_dir.mkdir(parents=True, exist_ok=True)
                 for member in archive.infolist():
                     safe = _safe_member(member.filename)
                     if safe and not member.is_dir():
@@ -857,6 +892,11 @@ class ModpackUpdater:
 
     def _sync_files(self, release: PackRelease, force: bool = False) -> None:
         """Synchronize a file manifest while deleting only previously owned paths."""
+        for entry in release.files:
+            validate_pack_content_path(entry.path)
+        for mod in release.optional_mods:
+            for path in mod.files:
+                validate_pack_content_path(path)
         previous = self._read_state()
         validate_paths(self.game_dir, [entry.path for entry in release.files], ALLOWED_ROOTS)
         for mod in release.optional_mods:

@@ -6,6 +6,31 @@ import json
 import re
 import shutil
 from pathlib import Path
+from urllib.parse import urlsplit
+
+
+def validate_profile(pack_id, server, minecraft, loader, loader_version, repository, visibility):
+    """Validate publisher-supplied metadata, not publisher identity or safety."""
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", pack_id):
+        raise ValueError("Invalid pack ID")
+    endpoint = urlsplit('//' + server)
+    if (not endpoint.hostname or endpoint.username or endpoint.password or endpoint.path
+            or endpoint.query or endpoint.fragment or any(c.isspace() for c in server)
+            or not 1 <= (endpoint.port if endpoint.port is not None else 25565) <= 65535):
+        raise ValueError("Invalid game server address")
+    if not re.fullmatch(r"1\.\d+(?:\.\d+)?", minecraft):
+        raise ValueError("Invalid Minecraft release")
+    if loader not in {'vanilla', 'forge', 'neoforge', 'fabric'}:
+        raise ValueError("Invalid loader")
+    if loader == 'vanilla':
+        if loader_version:
+            raise ValueError("Vanilla has no loader version")
+    elif not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}", loader_version):
+        raise ValueError("Loader version required")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) or any(x in {'.','..'} for x in repository.split('/')):
+        raise ValueError("Expected GitHub owner/repository")
+    if visibility not in {'internal', 'public'}:
+        raise ValueError("Invalid visibility")
 
 
 def file_type(path: str) -> str:
@@ -35,7 +60,20 @@ def main() -> None:
     parser.add_argument("assets", type=Path)
     parser.add_argument("--version", required=True)
     parser.add_argument("--tag", required=True)
+    parser.add_argument("--pack-id", default="gearmorph")
+    parser.add_argument("--server-address", default="playgearmorph.bisquitmc.net")
+    parser.add_argument("--minecraft", default="1.21.1")
+    parser.add_argument("--loader", default="neoforge")
+    parser.add_argument("--loader-version", default=None)
+    parser.add_argument("--repository", default="NexusMC202/website_NexusMC")
+    parser.add_argument("--visibility", default="internal")
     args = parser.parse_args()
+    if args.loader_version is None:
+        args.loader_version = '21.1.248' if args.loader == 'neoforge' and args.minecraft == '1.21.1' else ''
+    validate_profile(args.pack_id, args.server_address, args.minecraft, args.loader,
+                     args.loader_version, args.repository, args.visibility)
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,127}", args.tag):
+        raise ValueError("Invalid release tag")
     state = json.loads(args.state.read_text(encoding="utf-8"))
     args.assets.mkdir(parents=True, exist_ok=True)
     files = []
@@ -58,7 +96,7 @@ def main() -> None:
                 "url": (
                     "https://nexusmc.flux-productions.com/api/launcher/empty"
                     if source.stat().st_size == 0
-                    else (f"https://github.com/NexusMC202/website_NexusMC/releases/download/{args.tag}/{remote_asset}")
+                    else (f"https://github.com/{args.repository}/releases/download/{args.tag}/{remote_asset}")
                 ),
                 "size": source.stat().st_size,
                 "sha256": digest,
@@ -69,17 +107,17 @@ def main() -> None:
         )
     payload = {
         "schemaVersion": 2,
-        "pack": "gearmorph",
+        "pack": args.pack_id,
         "version": args.version,
         "packVersion": args.version,
         "requiredPackVersion": args.version,
         "channel": "stable",
-        "minecraft": "1.21.1",
-        "loader": "neoforge",
-        "loaderVersion": "21.1.248",
-        "visibility": "internal",
+        "minecraft": args.minecraft,
+        "loader": args.loader,
+        "loaderVersion": args.loader_version,
+        "visibility": args.visibility,
         "maintenance": False,
-        "minecraft_server": "playgearmorph.bisquitmc.net",
+        "minecraft_server": args.server_address,
         "files": files,
     }
     args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

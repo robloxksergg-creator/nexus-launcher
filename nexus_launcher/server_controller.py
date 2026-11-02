@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -9,6 +10,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import Callable
@@ -17,7 +19,7 @@ from pathlib import Path
 
 from nexus_launcher.process_utils import hidden_process_kwargs
 from nexus_launcher.projects import ServerProfile
-from nexus_launcher.secure_http import open_https
+from nexus_launcher.secure_http import open_https, origin
 
 
 @dataclass
@@ -127,11 +129,27 @@ class PterodactylServerController(ServerController):
             )
         return token
 
+    def _panel_endpoint(self) -> tuple[str, str]:
+        # This keyring namespace contains Bisquit credentials, not generic
+        # third-party panel credentials. A catalogue must not redirect them.
+        base = self.server.panel_url
+        if not isinstance(base, str) or base != base.strip():
+            raise ValueError("Неверный адрес панели Bisquit")
+        parts = urllib.parse.urlsplit(base)
+        if (origin(base) != ('https', 'mgr.bisquit.host', 443)
+                or parts.path not in ('', '/') or parts.query):
+            raise ValueError("Токен Bisquit нельзя отправлять на другую панель")
+        identifier = self.server.panel_server_id
+        if not isinstance(identifier, str) or not re.fullmatch(
+            r'(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})', identifier
+        ):
+            raise ValueError("Неверный ID сервера Bisquit")
+        return 'https://mgr.bisquit.host', identifier
+
     def _request(self, path: str, method: str = "GET", payload: dict | None = None) -> dict:
-        base = self.server.panel_url.rstrip("/")
-        identifier = self.server.panel_server_id.strip()
-        if not base.startswith("https://") or not identifier:
-            raise ValueError("Неверно настроены URL панели или ID сервера")
+        base, identifier = self._panel_endpoint()
+        if not path.startswith('/') or path.startswith('//') or any(c in path for c in '\\#\r\n'):
+            raise ValueError("Недопустимый путь API панели")
         body = json.dumps(payload).encode() if payload is not None else None
         permission = (f"servers.{payload['signal']}" if path == "/power" and payload
                       else "servers.command" if path == "/command" else "servers.view")
@@ -263,8 +281,7 @@ class PterodactylServerController(ServerController):
     def latest_log(self, lines: int = 500) -> str:
         try:
             with self._authorization("logs.view"):
-                base = self.server.panel_url.rstrip("/")
-                identifier = self.server.panel_server_id.strip()
+                base, identifier = self._panel_endpoint()
                 request = urllib.request.Request(
                     f"{base}/api/client/servers/{identifier}/files/contents?file=/logs/latest.log",
                     headers={"Authorization": f"Bearer {self._token()}", "Accept": "text/plain"},
