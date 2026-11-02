@@ -5,6 +5,7 @@ import threading
 import time
 from types import SimpleNamespace
 import unittest
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QApplication
 from nexus_launcher.preinstall_check import Check, Report
 from nexus_launcher.nexus_platform.preinstall_dialog import PreinstallDialog
@@ -31,6 +32,7 @@ class DialogTests(unittest.TestCase):
           ('fps','FPS','unknown','FPS не измерялся. Нужна установленная сборка и тестовая сцена.')])
         def operation(cancelled):calls.append(True);return Report(checks,time.time())
         d=self.make(operation);self.assertEqual(calls,[])
+        metrics=QFontMetrics(d.start_button.font());self.assertTrue(metrics.inFontUcs4(ord('П')));self.assertTrue(metrics.inFontUcs4(ord('J')))
         d.start_button.click();d.start_button.click();self.wait_idle();self.assertEqual(len(calls),1)
         self.assertIn('ОБРАТИТЕ ВНИМАНИЕ',d.labels[0].text());self.assertIn('НЕ ПОДТВЕРЖДЕНО',d.labels[4].text())
         self.assertTrue(d.start_button.isEnabled());self.assertFalse(d.progress.isVisible())
