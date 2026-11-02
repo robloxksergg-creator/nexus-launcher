@@ -1,0 +1,18 @@
+{
+  "versions": [
+    {
+      "version": "1.0.4",
+      "native_readiness": "PASS"
+    },
+    {
+      "version": "1.0.5",
+      "native_readiness": "PASS"
+    }
+  ],
+  "user_data_preserved": true,
+  "scope": "Real Windows processes; local signed fixtures, no live network feed",
+  "preinstall_ui_verified": true,
+  "child_report_sha256": "2eef81f0f3e3cf9487f0904b85a5ab496e4e0bab0a724e9a0fa5bc9adcb08355",
+  "source_commit": "d5dd5404462a071a743ea55a2e4873e7c668fc53",
+  "visual_scope": "Frozen Windows acceptance is offscreen and has missing font glyphs; native Windows Qt UI tests and screenshots verified separately in CI. This receipt establishes execution/state, not offscreen typography."
+}
