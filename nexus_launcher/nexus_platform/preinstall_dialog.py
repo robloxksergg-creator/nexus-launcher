@@ -29,7 +29,7 @@ class PreinstallDialog(NexusDialog):
         self.operation = operation or (lambda cancelled: collect(server, storage_root, java_path=java_path, allocated_mb=allocated_mb, cancelled=cancelled))
         root = QVBoxLayout(self); root.setContentsMargins(24,20,24,20); root.setSpacing(12)
         title = QLabel('Проверим перед скачиванием'); title.setObjectName('dialogTitle'); title.setWordWrap(True); root.addWidget(title)
-        name = QLabel(server.name); name.setTextFormat(Qt.TextFormat.PlainText); root.addWidget(name)
+        name = QLabel(server.name); name.setTextFormat(Qt.TextFormat.PlainText); name.setWordWrap(True); root.addWidget(name)
         intro = QLabel('RAM, диск, Java и соединение только с выбранным сервером. Java проверяется через -version. Игра не запускается; установка и настройки не изменяются.')
         intro.setWordWrap(True); intro.setObjectName('muted'); root.addWidget(intro)
         self.status = QLabel('Нажмите «Начать проверку». Результат не даёт допуск к серверу и не гарантирует производительность.')

@@ -103,7 +103,7 @@ def collect(server, storage_root, *, java_path='', allocated_mb=4096, cancelled=
         requested = allocated_mb if type(allocated_mb) is int and 256 <= allocated_mb <= 1048576 else None
         recommended = getattr(server, 'recommended_memory_mb', None)
         recommended = recommended if type(recommended) is int and 256 <= recommended <= 1048576 else None
-        state = 'info' if available is not None else 'unknown'
+        state = 'info' if available is not None and requested is not None else 'unknown'
         if available is not None and requested and available < requested * MIB: state = 'warning'
         if requested and recommended and requested < recommended: state = 'warning'
         add('ram', 'Оперативная память', state,
@@ -111,7 +111,7 @@ def collect(server, storage_root, *, java_path='', allocated_mb=4096, cancelled=
             (f' Для Java выбрано {requested} МБ.' if requested else ' Настройка памяти не подтверждена.')+
             (f' Рекомендация профиля: {recommended} МБ.' if recommended else '')+
             ' Память не резервируется; системе и другим приложениям тоже нужна RAM.')
-    except (OSError, ValueError, AttributeError): add('ram', 'Оперативная память', 'unknown', 'ОС не предоставила достоверные сведения о памяти.')
+    except (OSError, ValueError, AttributeError, subprocess.SubprocessError): add('ram', 'Оперативная память', 'unknown', 'ОС не предоставила достоверные сведения о памяти.')
     if (result := stopped()): return result
     try:
         free = free_disk(storage_root)

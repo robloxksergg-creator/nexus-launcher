@@ -32,6 +32,11 @@ class Checks(unittest.TestCase):
             report=module.collect(self.server,Path('/unused'),allocated_mb=6144)
         self.assertEqual(report.checks[0].state,'warning');self.assertEqual(report.checks[1].state,'unknown');self.assertEqual(report.checks[3].state,'unknown')
         self.assertIn('причина не установлена',report.checks[3].detail)
+    def test_memory_probe_timeout_remains_unknown_and_other_checks_continue(self):
+        with patch.object(module,'read_memory',side_effect=module.subprocess.TimeoutExpired('synthetic-os-probe',2)),patch.object(module,'free_disk',return_value=1),patch.object(module,'inspect_java',return_value=('unknown','fixture')),patch.object(module,'connection_time',return_value=1):
+            report=module.collect(self.server,Path('/unused'))
+        self.assertEqual(report.checks[0].state,'unknown');self.assertEqual(len(report.checks),5)
+
     def test_cancel_before_probe_has_no_side_effect(self):
         with patch.object(module,'read_memory') as memory,patch.object(module,'connection_time') as network:
             r=module.collect(self.server,Path('/unused'),cancelled=lambda:True)

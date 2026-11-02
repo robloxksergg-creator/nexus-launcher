@@ -15,8 +15,6 @@ jobs:
     env:
       PYTHONDONTWRITEBYTECODE: '1'
       QT_QPA_PLATFORM: offscreen
-      NEXUS_PREINSTALL_SCREENSHOT: ${{ runner.temp }}/preinstall-check.png
-      NEXUS_PREINSTALL_NARROW_SCREENSHOT: ${{ runner.temp }}/preinstall-check-narrow.png
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -30,6 +28,9 @@ jobs:
       - name: Install existing pinned test dependencies
         run: python -m pip install --disable-pip-version-check -r requirements.txt -r packaging/requirements/requirements-media.txt -r packaging/requirements/requirements-markdown.txt pytest==9.1.1
       - name: Preparation report, UI, bridge boundaries and feature regressions
+        env:
+          NEXUS_PREINSTALL_SCREENSHOT: ${{ runner.temp }}/preinstall-check.png
+          NEXUS_PREINSTALL_NARROW_SCREENSHOT: ${{ runner.temp }}/preinstall-check-narrow.png
         shell: bash
         run: |
           if [ "$RUNNER_OS" = macOS ]; then export TMPDIR="$(python -c 'import os,tempfile; print(os.path.realpath(tempfile.gettempdir()))')"; fi
