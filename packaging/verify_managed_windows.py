@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 
-def verify(initial_zip, initial_envelope, update_zip, update_envelope, root, report):
+def verify(initial_zip, initial_envelope, update_zip, update_envelope, root, report, *, preinstall_smoke=False):
     if os.name != 'nt':
         raise OSError('Windows acceptance required')
     import nexus_launcher.build_channel as channel
@@ -35,7 +35,7 @@ def verify(initial_zip, initial_envelope, update_zip, update_envelope, root, rep
             self.report = None
 
         def _argv(self, executable):
-            return [str(executable), '--self-test-report', str(self.report)]
+            return [str(executable), '--self-test-report', str(self.report)] + (['--preinstall-smoke'] if preinstall_smoke and self.report.name=='acceptance-1.json' else [])
 
         def launch(self, *args):
             child = super().launch(*args)
@@ -84,6 +84,9 @@ def verify(initial_zip, initial_envelope, update_zip, update_envelope, root, rep
                         or not smoke.get('loaded') or smoke.get('script_errors')
                         or not smoke.get('application_icon') or not smoke.get('window_icon')):
                     raise ValueError('Native smoke identity/readiness mismatch')
+                if preinstall_smoke and index == 1:
+                    if not smoke.get('preinstall',{}).get('visible') or smoke['preinstall'].get('cards')!=5:
+                        raise ValueError('Packaged preparation interface not verified')
                 output.append({'version': smoke['release_version'], 'native_readiness': 'PASS'})
             if previous == (root / 'active.json').read_bytes():
                 raise ValueError('Active slot did not change')
@@ -103,6 +106,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('initial-zip', 'initial-envelope', 'update-zip', 'update-envelope', 'root', 'report'):
         parser.add_argument('--' + name, required=True)
+    parser.add_argument('--preinstall-smoke', action='store_true')
     args = parser.parse_args()
     print(json.dumps(verify(args.initial_zip, args.initial_envelope, args.update_zip,
-                            args.update_envelope, args.root, args.report)))
+                            args.update_envelope, args.root, args.report, preinstall_smoke=args.preinstall_smoke)))

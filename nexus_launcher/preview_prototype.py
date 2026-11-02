@@ -69,6 +69,9 @@ def main(*, readiness_callback=None):
                         report = {"release_version": CURRENT_VERSION, "loaded": ok, "dom": value, "profile_off_record": window.profile.isOffTheRecord(), "script_errors": window.page.script_errors,
                                   "application_icon": not app.windowIcon().isNull(), "window_icon": not window.windowIcon().isNull(),
                                   "desktop_file_name": app.desktopFileName()}
+                        if "--preinstall-smoke" in sys.argv:
+                            from nexus_launcher.frozen_preinstall_smoke import check as check_preinstall
+                            report["preinstall"] = check_preinstall(window, output)
                         if "--content-smoke" in sys.argv:
                             from nexus_launcher.frozen_content_smoke import check_content
                             report["content"] = check_content(window)

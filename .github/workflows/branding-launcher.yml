@@ -2,7 +2,7 @@ name: Verify managed launcher review candidate
 'on':
   workflow_dispatch:
   push:
-    branches: [branding/verify-launcher, release/verify-1.0.4, release/verify-cross-platform-1.0.4]
+    branches: [branding/verify-launcher, release/verify-1.0.5, release/verify-cross-platform-1.0.5]
 permissions:
   contents: read
 jobs:
@@ -49,7 +49,7 @@ jobs:
           exit $LASTEXITCODE
       - name: Diagnostics and second-factor regression checks without live accounts
         run: |
-          python -B -m pytest tests/test_instance_diagnostics.py tests/test_nested_diagnostics.py tests/test_dependency_versions.py tests/test_diagnostic_version_bindings.py tests/test_instance_diagnostics_ui.py tests/test_diagnostic_versions_ui.py tests/test_diagnostic_workspace_ui.py tests/test_diagnostic_trial.py tests/test_diagnostic_trial_ui.py tests/test_two_factor_ui.py tests/test_nexus_account.py tests/test_auth_state.py -q -p no:cacheprovider
+          python -B -m pytest tests/test_preinstall_check.py tests/test_preinstall_ui.py tests/test_design_action_boundary.py tests/test_instance_diagnostics.py tests/test_nested_diagnostics.py tests/test_dependency_versions.py tests/test_diagnostic_version_bindings.py tests/test_instance_diagnostics_ui.py tests/test_diagnostic_versions_ui.py tests/test_diagnostic_workspace_ui.py tests/test_diagnostic_trial.py tests/test_diagnostic_trial_ui.py tests/test_two_factor_ui.py tests/test_nexus_account.py tests/test_auth_state.py -q -p no:cacheprovider
           exit $LASTEXITCODE
       - name: Render icons and collect component notices
         run: |
@@ -67,21 +67,21 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -B packaging/assemble_notice_bundle.py --output "$env:RUNNER_TEMP\combined-notices" --group "python=$env:RUNNER_TEMP\python-notices" --group "rust=$env:RUNNER_TEMP\rust-notices" --group "qtwebengine-source=$env:RUNNER_TEMP\qt-notices"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Build complete managed application with actual version 1.0.4
+      - name: Build complete managed application with actual version 1.0.5
         run: |
           $env:NEXUS_CANDIDATE_NOTICES = "$env:RUNNER_TEMP\combined-notices"
-          python -B packaging/prepare_public_variant.py --source . --destination "$env:RUNNER_TEMP\source-v104" --version 1.0.4
+          python -B packaging/prepare_public_variant.py --source . --destination "$env:RUNNER_TEMP\source-v105" --version 1.0.5
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -B -m PyInstaller --noconfirm --distpath "$env:RUNNER_TEMP\managed" --workpath "$env:RUNNER_TEMP\managed-work" "$env:RUNNER_TEMP\source-v104\packaging\specs\NexusManagedPublic.spec"
+          python -B -m PyInstaller --noconfirm --distpath "$env:RUNNER_TEMP\managed" --workpath "$env:RUNNER_TEMP\managed-work" "$env:RUNNER_TEMP\source-v105\packaging\specs\NexusManagedPublic.spec"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -B packaging/candidate_inventory.py --root "$env:RUNNER_TEMP\managed\NEXUS Managed Launcher" --output "$env:RUNNER_TEMP\managed\MANAGED-FILES.json"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -B -c "import pathlib,zipfile,sys; root=pathlib.Path(sys.argv[1]); z=zipfile.ZipFile(sys.argv[2],'w',zipfile.ZIP_DEFLATED); [z.write(p,p.relative_to(root).as_posix()) for p in sorted(root.rglob('*')) if p.is_file()]; z.close()" "$env:RUNNER_TEMP\managed\NEXUS Managed Launcher" "$env:RUNNER_TEMP\managed\NEXUS-Managed-1.0.4-Windows-x64.zip"
+          python -B -c "import pathlib,zipfile,sys; root=pathlib.Path(sys.argv[1]); z=zipfile.ZipFile(sys.argv[2],'w',zipfile.ZIP_DEFLATED); [z.write(p,p.relative_to(root).as_posix()) for p in sorted(root.rglob('*')) if p.is_file()]; z.close()" "$env:RUNNER_TEMP\managed\NEXUS Managed Launcher" "$env:RUNNER_TEMP\managed\NEXUS-Managed-1.0.5-Windows-x64.zip"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: nexus-managed-1.0.4-review
+          name: nexus-managed-1.0.5-review
           retention-days: 5
           path: |
-            ${{ runner.temp }}/managed/NEXUS-Managed-1.0.4-Windows-x64.zip
+            ${{ runner.temp }}/managed/NEXUS-Managed-1.0.5-Windows-x64.zip
             ${{ runner.temp }}/managed/MANAGED-FILES.json

@@ -3,7 +3,7 @@ name: macOS Apple Silicon review build
 'on':
   workflow_dispatch:
   push:
-    branches: [macos/verify-launcher, release/verify-cross-platform-1.0.4]
+    branches: [macos/verify-launcher, release/verify-cross-platform-1.0.5]
 
 permissions:
   contents: read
@@ -38,19 +38,19 @@ jobs:
           python -m pip install --no-index --no-deps "$RUNNER_TEMP"/wheels/*.whl
       - name: Test Mac entrypoint and shared platform contracts
         env:
-          QT_QPA_PLATFORM: offscreen
+          QT_QPA_PLATFORM: cocoa
         run: |
           python -B -m unittest discover -s tests -p test_macos_entrypoint.py -v
           python -B -m pytest tests/test_platform_support.py tests/test_nexus_account.py tests/test_registration.py -q -p no:cacheprovider
       - name: Shared diagnostics, dependency review, trial and second-factor regressions
         env:
-          QT_QPA_PLATFORM: offscreen
+          QT_QPA_PLATFORM: cocoa
           NEXUS_DIAGNOSTICS_SCREENSHOT: ${{ runner.temp }}/diagnostics.png
           NEXUS_TRIAL_REVIEW_SCREENSHOT: ${{ runner.temp }}/trial-review.png
           NEXUS_TRIAL_RESULT_SCREENSHOT: ${{ runner.temp }}/trial-result.png
         run: |
           export TMPDIR="$(python -c 'import os,tempfile; print(os.path.realpath(tempfile.gettempdir()))')"
-          python -B -m pytest tests/test_instance_diagnostics.py tests/test_nested_diagnostics.py tests/test_dependency_versions.py tests/test_diagnostic_version_bindings.py tests/test_instance_diagnostics_ui.py tests/test_diagnostic_versions_ui.py tests/test_diagnostic_workspace_ui.py tests/test_diagnostic_trial.py tests/test_diagnostic_trial_ui.py tests/test_two_factor_ui.py tests/test_nexus_account.py tests/test_auth_state.py -q -p no:cacheprovider --junitxml="$RUNNER_TEMP/feature-tests.xml"
+          python -B -m pytest tests/test_preinstall_check.py tests/test_preinstall_ui.py tests/test_design_action_boundary.py tests/test_instance_diagnostics.py tests/test_nested_diagnostics.py tests/test_dependency_versions.py tests/test_diagnostic_version_bindings.py tests/test_instance_diagnostics_ui.py tests/test_diagnostic_versions_ui.py tests/test_diagnostic_workspace_ui.py tests/test_diagnostic_trial.py tests/test_diagnostic_trial_ui.py tests/test_two_factor_ui.py tests/test_nexus_account.py tests/test_auth_state.py -q -p no:cacheprovider --junitxml="$RUNNER_TEMP/feature-tests.xml"
       - name: Collect component notices
         run: |
           curl --fail --location --max-time 180 'https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.8.3-src/pyside-setup-everywhere-src-6.8.3.tar.xz' --output "$RUNNER_TEMP/pyside-source.tar.xz"
@@ -67,8 +67,8 @@ jobs:
         env:
           NEXUS_CANDIDATE_NOTICES: ${{ runner.temp }}/notices
         run: |
-          python -B packaging/prepare_public_variant.py --source . --destination "$RUNNER_TEMP/source-v104" --version 1.0.4
-          python -B -m PyInstaller --noconfirm --distpath "$RUNNER_TEMP/dist" --workpath "$RUNNER_TEMP/pyinstaller-work" "$RUNNER_TEMP/source-v104/packaging/specs/NexusPublicMac.spec"
+          python -B packaging/prepare_public_variant.py --source . --destination "$RUNNER_TEMP/source-v105" --version 1.0.5
+          python -B -m PyInstaller --noconfirm --distpath "$RUNNER_TEMP/dist" --workpath "$RUNNER_TEMP/pyinstaller-work" "$RUNNER_TEMP/source-v105/packaging/specs/NexusPublicMac.spec"
       - name: Frozen native Cocoa window smoke
         env:
           QT_QPA_PLATFORM: cocoa
@@ -76,26 +76,27 @@ jobs:
         run: |
           mkdir "$RUNNER_TEMP/smoke"
           mkdir "$RUNNER_TEMP/smoke/home"
-          python -c 'import subprocess,sys; subprocess.run([sys.argv[1],"--self-test-report",sys.argv[2]],check=True,timeout=90,env={**__import__("os").environ,"HOME":sys.argv[3]})' "$RUNNER_TEMP/dist/NEXUS Launcher.app/Contents/MacOS/NEXUS Launcher" "$RUNNER_TEMP/smoke/result.json" "$RUNNER_TEMP/smoke/home"
-          python -c "import json,sys; p=json.load(open(sys.argv[1])); assert p['release_version']=='1.0.4' and p['loaded'] is True and p['application_icon'] is True and not p['script_errors'],p" "$RUNNER_TEMP/smoke/result.json"
+          python -c 'import subprocess,sys; subprocess.run([sys.argv[1],"--self-test-report",sys.argv[2],"--preinstall-smoke"],check=True,timeout=90,env={**__import__("os").environ,"HOME":sys.argv[3]})' "$RUNNER_TEMP/dist/NEXUS Launcher.app/Contents/MacOS/NEXUS Launcher" "$RUNNER_TEMP/smoke/result.json" "$RUNNER_TEMP/smoke/home"
+          python -c "import json,sys; p=json.load(open(sys.argv[1])); assert p['release_version']=='1.0.5' and p['loaded'] is True and p['application_icon'] is True and not p['script_errors'] and p['preinstall']['visible'] and p['preinstall']['cards']==5,p" "$RUNNER_TEMP/smoke/result.json"
       - name: Verify ad-hoc integrity and archive review bundle
         run: |
           codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/dist/NEXUS Launcher.app"
           test "$(lipo -archs "$RUNNER_TEMP/dist/NEXUS Launcher.app/Contents/MacOS/NEXUS Launcher")" = arm64
           cp packaging/README-macOS.md "$RUNNER_TEMP/README-macOS.md"
-          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/dist/NEXUS Launcher.app" "$RUNNER_TEMP/NEXUS-1.0.4-macOS-arm64.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/dist/NEXUS Launcher.app" "$RUNNER_TEMP/NEXUS-1.0.5-macOS-arm64.zip"
           cd "$RUNNER_TEMP"
-          shasum -a 256 NEXUS-1.0.4-macOS-arm64.zip > SHA256SUMS-macOS.txt
+          shasum -a 256 NEXUS-1.0.5-macOS-arm64.zip > SHA256SUMS-macOS.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: nexus-macos-1.0.4-review
+          name: nexus-macos-1.0.5-review
           retention-days: 5
           path: |
-            ${{ runner.temp }}/NEXUS-1.0.4-macOS-arm64.zip
+            ${{ runner.temp }}/NEXUS-1.0.5-macOS-arm64.zip
             ${{ runner.temp }}/SHA256SUMS-macOS.txt
             ${{ runner.temp }}/README-macOS.md
             ${{ runner.temp }}/smoke/result.json
             ${{ runner.temp }}/smoke/result.png
+            ${{ runner.temp }}/smoke/result-preinstall.png
             ${{ runner.temp }}/feature-tests.xml
             ${{ runner.temp }}/diagnostics.png
             ${{ runner.temp }}/trial-review.png
