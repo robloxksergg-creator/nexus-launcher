@@ -2,7 +2,7 @@ name: Verify managed launcher review candidate
 'on':
   workflow_dispatch:
   push:
-    branches: [branding/verify-launcher, release/verify-1.0.4]
+    branches: [branding/verify-launcher, release/verify-1.0.4, release/verify-cross-platform-1.0.4]
 permissions:
   contents: read
 jobs:

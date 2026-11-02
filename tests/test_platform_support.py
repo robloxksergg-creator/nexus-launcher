@@ -31,3 +31,20 @@ def test_selector_skips_java_8_and_chooses_java_21(tmp_path, monkeypatch):
 
     monkeypatch.setattr(platform_support, "java_major", lambda path: 21 if Path(path) == java21 else 8)
     assert platform_support._select_java([java8, java21]) == str(java21.resolve())
+
+
+def test_linux_data_uses_xdg_without_windows_appdata(tmp_path, monkeypatch):
+    monkeypatch.setattr(platform_support.sys, 'platform', 'linux')
+    monkeypatch.setenv('XDG_DATA_HOME', str(tmp_path))
+    monkeypatch.setenv('APPDATA', str(tmp_path / 'windows-unused'))
+    assert platform_support.app_data_dir() == tmp_path / 'nexus-launcher'
+
+
+def test_linux_file_manager_passes_path_as_single_argument(tmp_path, monkeypatch):
+    monkeypatch.setattr(platform_support.sys, 'platform', 'linux')
+    target = tmp_path / 'space and ; shell text'
+    target.mkdir()
+    calls = []
+    monkeypatch.setattr(platform_support.subprocess, 'Popen', lambda args: calls.append(args))
+    platform_support.open_in_file_manager(target)
+    assert calls == [['xdg-open', str(target.resolve())]]
