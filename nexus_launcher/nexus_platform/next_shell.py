@@ -261,6 +261,7 @@ class NexusLauncher(PlatformLauncher):
         self.catalog = self.discover_page
         self.discover_page.world_requested.connect(lambda world: self.show_server(world.server))
         self.world_page.play_requested.connect(self._play)
+        self.world_page.preinstall_requested.connect(self._check_before_install)
         self.world_page.menu_requested.connect(self._world_menu)
         self.world_page.video_muted_changed.connect(self._video_muted_changed)
         self.world_page.save_requested.connect(self._save_world)
@@ -296,6 +297,15 @@ class NexusLauncher(PlatformLauncher):
     def _sync_saved_world(self):
         saved = self.current_server and self.current_server.id in self.config.get("savedWorlds", [])
         self.world_page.save.setText("Убрать мир" if saved else "Сохранить мир")
+
+    def _check_before_install(self, server=None):
+        server = server or self.current_server
+        if server is None:
+            return
+        from .preinstall_dialog import PreinstallDialog
+        dialog = PreinstallDialog(server, self._storage_root,
+            java_path=self.config.get('java_path', ''), allocated_mb=self.config.get('memory', 4096), parent=self)
+        dialog.exec()
 
     def select_server(self, server):
         super().select_server(server)

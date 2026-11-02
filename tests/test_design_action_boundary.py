@@ -30,7 +30,7 @@ def fixture(allow=True, identifier='valid'):
     services=NS(_current_page='home', config={'creatorMode':True},account_profile=NS(),game_process=None,
                 play=NS(isEnabled=lambda:True),world_views=[NS(id='valid',server=NS())])
     for name in ('_toggle_pin','select_server','_save_world','_play','_login_account','_register_account',
-                 '_logout_account','_refresh_account','_open_web_profile','_stop_game'):
+                 '_logout_account','_refresh_account','_open_web_profile','_stop_game','_check_before_install'):
         setattr(services,name,spy(name))
     services.studio_page=NS(open_creator=spy('academy'))
     services.instances_page=NS(_create=spy('create'),_open_card=spy('open'),_launch=spy('launch'))
@@ -99,6 +99,18 @@ class ActionTests(unittest.TestCase):
             else:host.services.play=NS(isEnabled=lambda:False)
             namespace['_action'](host,'play-server','valid')
             self.assertNotIn('_play',calls)
+    def test_preinstall_check_does_not_select_install_launch_or_mutate_navigation(self):
+        host,calls=fixture()
+        namespace['_action'](host,'check-server','valid')
+        self.assertEqual(calls,['_check_before_install'])
+        self.assertEqual(host.services._current_page,'home')
+        host,calls=fixture()
+        namespace['_action'](host,'check-server','missing')
+        self.assertEqual(calls,[])
+        host,calls=fixture(allow=False)
+        namespace['_action'](host,'check-server','valid')
+        self.assertEqual(calls,[])
+
     def test_navigation_every_action_and_negative_urls(self):
         Page=nav['ExtractedPage']
         for action in ACTIONS:

@@ -36,6 +36,7 @@
     const busy=/checking|preparing|downloading|verifying|applying|finalizing|running/i.test(world.delivery);
     return commandButton(playLabel(world),'play-server',world.id,true,(!world.allowed||busy||state.gameRunning)?'disabled':'');
   }
+  function checkButton(world) { return commandButton('Проверить перед установкой','check-server',world.id); }
   function empty(title,copy,label,target,{error=false,actionName='',art='minecraft-meadow.png'}={}) {
     return `<section class="empty ${error?'error':''}">${image('/'+art,'empty-art')}<div><h3>${esc(title)}</h3><p>${esc(copy)}</p>${actionName?commandButton(label,actionName,'',true):routeButton(label,target)}</div></section>`;
   }
@@ -44,7 +45,7 @@
   }
   function buildRow(build) {return `<article class="build-row">${image(fallback(build.id),'build-thumb')}<div class="build-row-copy"><h3>${esc(build.name)}</h3><p class="meta">Minecraft ${esc(build.version)} · ${esc(loaderName(build.loader))} · ${build.mods} модов</p><p class="meta">${build.lastPlayed?'Последний запуск: '+date(build.lastPlayed):'Ещё не запускалась'}</p></div>${commandButton('Открыть','open-build',build.id)}${commandButton('Играть','play-build',build.id,true)}</article>`;}
   function hero(world,eyebrow='МИР NEXUS',detail=false) {
-    return `<section class="hero" style="--world-accent:${eattr(world.accent)}">${image(world.artwork)}<div class="hero-topline">${status(world)}</div><div class="hero-content"><p class="eyebrow">${eyebrow}</p><h2>${esc(world.name)}</h2><p class="hero-description">${esc(world.description)}</p><div class="hero-actions">${playButton(world)}${detail?commandButton(world.saved?'Мир сохранён':'Сохранить мир','save-server',world.id):`<button class="button ghost" data-route="server" data-id="${eattr(world.id)}">Об этом мире</button>`}<span class="meta">Minecraft ${esc(world.version)} · ${esc(loaderName(world.loader))}</span></div></div></section>`;
+    return `<section class="hero" style="--world-accent:${eattr(world.accent)}">${image(world.artwork)}<div class="hero-topline">${status(world)}</div><div class="hero-content"><p class="eyebrow">${eyebrow}</p><h2>${esc(world.name)}</h2><p class="hero-description">${esc(world.description)}</p><div class="hero-actions">${playButton(world)}${checkButton(world)}${detail?commandButton(world.saved?'Мир сохранён':'Сохранить мир','save-server',world.id):`<button class="button ghost" data-route="server" data-id="${eattr(world.id)}">Об этом мире</button>`}<span class="meta">Minecraft ${esc(world.version)} · ${esc(loaderName(world.loader))}</span></div></div></section>`;
   }
 
 return {commandButton,routeButton,fallback,image,date,status,statuses,playLabel,playButton,empty,worldCard,buildRow,hero,loaderName};

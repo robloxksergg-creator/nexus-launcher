@@ -17,7 +17,7 @@ from .prototype_host import PrototypeHost, PrototypePage, same_origin
 
 ACTIONS = frozenset({"support", "leave", "library", "settings", "downloads", "logs", "studio", "academy",
                      "create", "open-build", "play-build", "select-server", "play-server",
-                     "save-server", "pin-server", "server-tools", "login", "register",
+                     "save-server", "pin-server", "server-tools", "check-server", "login", "register",
                      "logout", "refresh-profile", "edit-profile", "fullscreen", "refresh", "stop-game"})
 IDENTIFIER = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
@@ -195,6 +195,13 @@ class DesignHost(PrototypeHost):
         return None
 
     def _action(self, name, identifier):
+        if name == "check-server":
+            if not self._navigation_allowed(self.services._current_page):
+                return
+            world = next((item for item in self.services.world_views if item.id == identifier), None)
+            if world is not None:
+                self.services._check_before_install(world.server)
+            return
         targets = {"support": "support", "leave": "home", "library": "library", "settings": "settings",
                    "downloads": "downloads", "logs": "logs", "studio": "studio",
                    "create": "library", "open-build": "library", "play-build": "library",

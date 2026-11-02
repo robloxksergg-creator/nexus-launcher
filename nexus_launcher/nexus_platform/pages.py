@@ -286,6 +286,7 @@ class DiscoverPage(QWidget):
 
 
 class WorldPage(QWidget):
+    preinstall_requested = Signal()
     play_requested = Signal()
     menu_requested = Signal(object)
     video_muted_changed = Signal(bool)
@@ -348,6 +349,10 @@ class WorldPage(QWidget):
         self.progress.setFixedWidth(260)
         self.progress.hide()
         actions.addWidget(self.play)
+        self.preinstall = QPushButton('Проверить перед установкой')
+        self.preinstall.setObjectName('heroMenu')
+        self.preinstall.clicked.connect(self.preinstall_requested)
+        actions.addWidget(self.preinstall)
         actions.addWidget(menu)
         actions.addWidget(self.progress)
         actions.addStretch()

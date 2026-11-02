@@ -244,3 +244,6 @@ result enables Continue-to-login; no password is reused or launcher session
 created. Missing/deferred profile confirmation retains the existing profile-setup
 path. Errors never automatically replay registration. Synthetic tests cover this
 compatibility behavior; real email-code completion still requires manual testing.
+
+## Pre-install preparation checks
+PreinstallDialog and preinstall_check own an optional read-only point-in-time report, not install/launch/admission authority. One explicit start reads RAM, containing-volume free space, bounded Java -version candidates and one DNS+TCP connection to the catalog endpoint. The result distinguishes TCP reachability from Minecraft readiness/latency. Disk sufficiency stays unknown without a complete install-size requirement; FPS and download throughput are not measured. Mac available-memory data can remain unknown. Native/system requests may delay cooperative cancellation; the dialog remains owned until its worker finishes, with no forced thread termination or automatic retry. Opening this report must not call select_server or migrate/create an instance. Existing installation and access gates are unchanged.
