@@ -39,18 +39,21 @@ jobs:
           PY
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
+          merge-multiple: true
           artifact-ids: '13144235043'
           run-id: 41447223497
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/inputs/windows
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
+          merge-multiple: true
           artifact-ids: '13141704620'
           run-id: 41447223776
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/inputs/linux
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
+          merge-multiple: true
           artifact-ids: '13143576951'
           run-id: 41447223853
           github-token: ${{ github.token }}
