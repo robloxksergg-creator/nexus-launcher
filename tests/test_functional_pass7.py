@@ -1,6 +1,7 @@
 import base64
 import io
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -60,6 +61,7 @@ def test_production_and_staging_keys_are_not_interchangeable(tmp_path):
         repo.list_worlds()
 
 
+@pytest.mark.skipif(sys.platform != 'win32', reason='Uses actual Windows subprocess API')
 def test_windows_hidden_process_policy(monkeypatch):
     import nexus_launcher.process_utils as process_utils
     monkeypatch.setattr(process_utils.sys, "platform", "win32")
@@ -67,3 +69,10 @@ def test_windows_hidden_process_policy(monkeypatch):
     assert value["creationflags"] & process_utils.subprocess.CREATE_NO_WINDOW
     assert value["creationflags"] & 0x200
     assert value["startupinfo"].dwFlags & process_utils.subprocess.STARTF_USESHOWWINDOW
+
+
+@pytest.mark.parametrize('system', ['linux', 'darwin'])
+def test_nonwindows_process_policy_does_not_use_windows_api(monkeypatch, system):
+    import nexus_launcher.process_utils as process_utils
+    monkeypatch.setattr(process_utils.sys, 'platform', system)
+    assert process_utils.hidden_process_kwargs(0x200) == {}

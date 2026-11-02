@@ -17,6 +17,8 @@ jobs:
       PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
       QT_QPA_PLATFORM: ${{ matrix.os == 'windows-2025' && 'windows' || matrix.os == 'macos-15' && 'cocoa' || 'offscreen' }}
       RUSTUP_TOOLCHAIN: 1.99.1
+      PYO3_BUILD_EXTENSION_MODULE: '1'
+      PYO3_USE_RAW_DYLIB: '0'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -26,7 +28,7 @@ jobs:
           python-version: '3.12'
       - name: Linux Qt runtime libraries on disposable runner
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0 libpulse0 libasound2t64 libxkbcommon-x11-0 libxcb-cursor0
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0 libpulse0 libasound2t64 libxkbcommon-x11-0 libxcb-cursor0 xvfb
       - name: Existing pinned tools and dependencies
         shell: bash
         run: |
@@ -53,17 +55,47 @@ jobs:
           fi
           python -m pip install --no-index --no-deps "$RUNNER_TEMP"/wheels/*.whl
           python -B -c "from nexus_launcher.native_transfer import _native; assert _native is not None; print('Native Rust path enabled')"
+      - name: Native Python bridge lint and dependency consistency
+        shell: bash
+        run: |
+          cargo clippy --locked -p nexus-python -- -D warnings
+          python -m pip check
       - name: Entire deterministic launcher suite with native extension
+        env:
+          NEXUS_PREINSTALL_SCREENSHOT: ${{ runner.temp }}/preinstall.png
+          NEXUS_PREINSTALL_NARROW_SCREENSHOT: ${{ runner.temp }}/preinstall-narrow.png
+          NEXUS_DIAGNOSTICS_SCREENSHOT: ${{ runner.temp }}/diagnostics.png
+          NEXUS_TRIAL_REVIEW_SCREENSHOT: ${{ runner.temp }}/trial-review.png
+          NEXUS_TRIAL_RESULT_SCREENSHOT: ${{ runner.temp }}/trial-result.png
         shell: bash
         run: |
           if [ "$RUNNER_OS" = macOS ]; then export TMPDIR="$(python -c 'import os,tempfile; print(os.path.realpath(tempfile.gettempdir()))')"; fi
           # This one test file reads the separate website repository. It is run
           # locally against the actual website source, never replaced by a stub.
           # Opt-in live API/visual tests keep their normal declared skip rules.
-          python -B -m pytest tests --ignore=tests/test_device_binding_security.py -q -p no:cacheprovider --junitxml="$RUNNER_TEMP/full-suite.xml"
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a python -B -m pytest tests --ignore=tests/test_device_binding_security.py --ignore=tests/test_ui.py -q -p no:cacheprovider --junitxml="$RUNNER_TEMP/full-suite.xml"
+          else
+            python -B -m pytest tests --ignore=tests/test_device_binding_security.py --ignore=tests/test_ui.py -q -p no:cacheprovider --junitxml="$RUNNER_TEMP/full-suite.xml"
+          fi
+      - name: Legacy Tk window in separate process from Qt
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a python -B -m pytest tests/test_ui.py -q -p no:cacheprovider --junitxml="$RUNNER_TEMP/legacy-tk.xml"
+          else
+            python -B -m pytest tests/test_ui.py -q -p no:cacheprovider --junitxml="$RUNNER_TEMP/legacy-tk.xml"
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: prerelease-audit-${{ runner.os }}
           retention-days: 5
-          path: ${{ runner.temp }}/full-suite.xml
+          path: |
+            ${{ runner.temp }}/full-suite.xml
+            ${{ runner.temp }}/legacy-tk.xml
+            ${{ runner.temp }}/preinstall.png
+            ${{ runner.temp }}/preinstall-narrow.png
+            ${{ runner.temp }}/diagnostics.png
+            ${{ runner.temp }}/trial-review.png
+            ${{ runner.temp }}/trial-result.png

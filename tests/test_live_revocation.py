@@ -48,7 +48,7 @@ def panel(security, session):
         return Response()
 
     server = ServerProfile("nexus_launcher.main", "Fixture", "fixture.invalid", management_type="pterodactyl",
-                           panel_url="https://fixture.invalid", panel_server_id="fixture")
+                           panel_url="https://mgr.bisquit.host", panel_server_id="0d2ad2ea")
     controller = PterodactylServerController(
         server, opener=opener, keyring_module=keyring,
         authorization=lambda permission: security.operation_authorization(session, permission, "project", "nexus_launcher.main"))
@@ -234,7 +234,7 @@ def test_actual_admin_factory_binds_actor_and_scope_without_gui(security, owner,
                             _key=lambda project, server: f"{project.id}/{server.id}")
     project = SimpleNamespace(id="project")
     server = ServerProfile("nexus_launcher.main", "Fixture", "localhost", management_type="pterodactyl",
-                           panel_url="https://fixture.invalid", panel_server_id="fixture")
+                           panel_url="https://mgr.bisquit.host", panel_server_id="0d2ad2ea")
     controller = namespace["_controller"](panel, project, server)
     effects, keyring = [], FakeKeyring()
     controller._opener = lambda request, timeout: effects.append("PROVIDER") or Response()

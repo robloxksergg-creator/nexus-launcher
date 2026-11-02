@@ -38,6 +38,9 @@ def library(monkeypatch):
                "get_os_version": lambda: "10.0", "get_natives": lambda _: "",
                "get_executable_path": lambda *_: None, "get_library_version": lambda: "8.0",
                "VersionNotFound": type("VersionNotFound", (Exception,), {}), "__name__": "pinned_mcl_reference"}
+    # The reference simulates Windows. Native rules must see that same context,
+    # rather than the runner's Linux/macOS host while the reference sees Windows.
+    monkeypatch.setattr(native_minecraft, "platform", context["platform"])
     _definitions(FIXTURE / "_helper.py", {"get_classpath_separator", "get_library_path", "parse_rule_list",
                  "parse_single_rule", "inherit_json", "_get_lib_name_without_version"}, context)
     _definitions(FIXTURE / "command.py", None, context)
@@ -111,7 +114,11 @@ def options(mode):
 
 @pytest.mark.parametrize("kind", ["modern", "legacy", "fallback", "empty-jvm", "runtime", "inherited"])
 @pytest.mark.parametrize("mode", ["defaults", "nexus", "cascade"])
-def test_vector_matches_pinned_reference(backend, library, tmp_path, kind, mode):
+@pytest.mark.parametrize("system", ["Windows", "Linux", "Darwin"])
+def test_vector_matches_pinned_reference(backend, library, tmp_path, monkeypatch, kind, mode, system):
+    host = SimpleNamespace(system=lambda: system, architecture=lambda: ("64bit", ""))
+    monkeypatch.setitem(library.parse_rule_list.__globals__, "platform", host)
+    monkeypatch.setattr(native_minecraft, "platform", host)
     profile(tmp_path, kind)
     before = {p: p.read_bytes() for p in tmp_path.rglob("*.json")}
     supplied = options(mode); original = copy.deepcopy(supplied)
@@ -119,7 +126,8 @@ def test_vector_matches_pinned_reference(backend, library, tmp_path, kind, mode)
     actual = native_minecraft.get_minecraft_command("synthetic", str(tmp_path), supplied)
     assert actual == expected
     assert supplied == original and {p: p.read_bytes() for p in before} == before
-    assert "never-on-windows" not in actual
+    if system == "Windows":
+        assert "never-on-windows" not in actual
 
 
 def test_real_launcher_preserves_ticket_order_and_command_vector(backend, library, tmp_path, monkeypatch):

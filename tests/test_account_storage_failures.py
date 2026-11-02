@@ -36,7 +36,7 @@ def test_storage_failure_reenables_portable_account_ui(candidate, monkeypatch, o
     app, window, _ = candidate
     messages = []
     monkeypatch.setattr("nexus_launcher.modern_main.QMessageBox.warning", lambda *args: messages.append(args[-1]))
-    def refused(*_): raise AccountError("Системное хранилище недоступно. Повторите вход.")
+    def refused(*_, **__): raise AccountError("Системное хранилище недоступно. Повторите вход.")
     monkeypatch.setattr(window.account_client, operation, refused)
     window.profile.setEnabled(False)
     if operation == "login":

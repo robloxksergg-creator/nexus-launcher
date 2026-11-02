@@ -35,12 +35,14 @@ def test_completed_registration_opens_login_only_after_profile_confirmation(acce
 @pytest.mark.parametrize('accepted',[True,False])
 def test_login_requires_manual_password_and_cancel_never_authenticates(accepted):
     calls=[]
-    dialog=SimpleNamespace(identifier=SimpleNamespace(setText=lambda text:calls.append(('identifier',text))),password=SimpleNamespace(setFocus=lambda:calls.append('focus'),clear=lambda:calls.append('cleared')),exec=lambda:accepted,credentials=lambda:('Synthetic_User','synthetic-password'))
-    sign_in=nested('sign_in',dict(auth=SimpleNamespace(busy=False,run=lambda *a:calls.append(('auth',a))),NexusLogin=lambda host:dialog,host=object()))
+    dialog=SimpleNamespace(identifier=SimpleNamespace(setText=lambda text:calls.append(('identifier',text))),password=SimpleNamespace(setFocus=lambda:calls.append('focus'),clear=lambda:calls.append('cleared')),exec=lambda:accepted,credentials=lambda:('Synthetic_User','synthetic-password'),second_factor=lambda:('123456',''))
+    sign_in=nested('sign_in',dict(auth=SimpleNamespace(busy=False,run=lambda *a,**k:calls.append(('auth',a,k))),NexusLogin=lambda host:dialog,host=object()))
     sign_in('Synthetic_User')
     assert calls[:2]==[('identifier','Synthetic_User'),'focus']
     assert 'cleared' in calls
     assert any(isinstance(x,tuple) and x[0]=='auth' for x in calls)==accepted
+    if accepted:
+        assert next(x for x in calls if isinstance(x,tuple) and x[0]=='auth')[2] == {'totp_code':'123456','recovery_code':''}
 
 
 def test_auth_busy_prevents_duplicate_login_dialog():
