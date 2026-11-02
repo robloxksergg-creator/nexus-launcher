@@ -277,3 +277,6 @@ System keyring failures use existing account-error feedback and unblock retry.
 
 ## Pre-install preparation report
 The existing world hero and Qt WorldPage expose “Проверить перед установкой”. A native NexusDialog uses shared presentation tokens, five vertically scrollable result cards, explicit start/retry and readable unknown/warning labels. No performance score or FPS estimate is invented. The browser projects only the fixed action and catalog ID; paths and measurements remain native.
+
+### Owner reference: pre-install diagnostic plate
+The preparation report now uses the supplied compact diagnostic reference: native shared chrome, NEXUS / DIAGNOSTICS masthead, a restrained cyan #35c8df diagnostic accent, numbered component rail and bordered result cards. Shared launcher buttons, semantic status colors and typography remain canonical. Vector state symbols accompany readable labels; secondary caveats remain visible. Busy progress is indeterminate because the collector emits a final report, not intermediate measurements. The completion badge counts processed entries, including unknowns, and is never a hardware-readiness percentage. Scroll belongs to the card list; footer actions remain reachable at narrow widths.

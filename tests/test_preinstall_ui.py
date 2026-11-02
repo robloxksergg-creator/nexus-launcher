@@ -36,13 +36,17 @@ class DialogTests(unittest.TestCase):
         d.start_button.click();d.start_button.click();self.wait_idle();self.assertEqual(len(calls),1)
         self.assertIn('ОБРАТИТЕ ВНИМАНИЕ',d.labels[0].text());self.assertIn('НЕ ПОДТВЕРЖДЕНО',d.labels[4].text())
         self.assertTrue(d.start_button.isEnabled());self.assertFalse(d.progress.isVisible())
+        self.assertEqual(d.scan_badge.text(),'ОБРАБОТАНО 5/5');self.assertEqual([x.state for x in d.icons],['warning','unknown','ok','ok','unknown'])
+        self.assertIn('Память не резервируется',d.details[0].text());self.app.processEvents()
         if path:=os.environ.get('NEXUS_PREINSTALL_SCREENSHOT'):d.grab().save(path)
         d.resize(520,620);self.app.processEvents()
+        self.assertLessEqual(d.scroll.horizontalScrollBar().maximum(),0)
         if path:=os.environ.get('NEXUS_PREINSTALL_NARROW_SCREENSHOT'):d.grab().save(path)
         d.start_button.click();self.wait_idle();self.assertEqual(len(calls),2)
     def test_failure_is_sanitized(self):
         def operation(cancelled):raise RuntimeError('SECRET fixture password or local path')
         d=self.make(operation);d.start_button.click();self.wait_idle()
+        self.assertEqual(d.scan_badge.text(),'ПРЕРВАНО')
         self.assertNotIn('SECRET',d.status.text());self.assertTrue(all('SECRET' not in x.text() for x in d.labels));self.assertTrue(d.start_button.isEnabled())
     def test_closing_waits_for_owned_worker_without_termination(self):
         entered=threading.Event()
