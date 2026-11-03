@@ -1,0 +1,27 @@
+{
+  "versions": [
+    {
+      "version": "1.0.5",
+      "native_readiness": "PASS"
+    },
+    {
+      "version": "1.0.6",
+      "native_readiness": "PASS"
+    }
+  ],
+  "user_data_preserved": true,
+  "scope": "Real Windows processes; local signed fixtures, no live network feed",
+  "preinstall_ui_verified": true,
+  "child_report_sha256": "a75222d2e2389c152ecdae06562b3554417e934c0bd75735d7f688a6479bf347",
+  "source_commit": "29f9cb6a2a1796ab0a0e1b2a23d618b03822f4d8",
+  "environment": "Disposable Windows CI; does not qualify local Smart App Control policy",
+  "local_validation": {
+    "status": "BLOCKED_BY_CODE_INTEGRITY",
+    "stage": "initial 1.0.5 native extension",
+    "event_ids": [
+      3033,
+      3077
+    ],
+    "scope": "CI pass does not remove local Windows policy block"
+  }
+}
