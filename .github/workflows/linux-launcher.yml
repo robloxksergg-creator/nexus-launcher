@@ -3,7 +3,7 @@ name: Linux launcher review build
 'on':
   workflow_dispatch:
   push:
-    branches: [linux/verify-launcher, release/verify-cross-platform-1.0.5]
+    branches: [linux/verify-launcher, release/verify-cross-platform-1.0.6]
 
 permissions:
   contents: read
@@ -49,7 +49,7 @@ jobs:
           NEXUS_TRIAL_REVIEW_SCREENSHOT: ${{ runner.temp }}/trial-review.png
           NEXUS_TRIAL_RESULT_SCREENSHOT: ${{ runner.temp }}/trial-result.png
         run: |
-          python -B -m pytest tests/test_preinstall_check.py tests/test_preinstall_ui.py tests/test_design_action_boundary.py tests/test_instance_diagnostics.py tests/test_nested_diagnostics.py tests/test_dependency_versions.py tests/test_diagnostic_version_bindings.py tests/test_instance_diagnostics_ui.py tests/test_diagnostic_versions_ui.py tests/test_diagnostic_workspace_ui.py tests/test_diagnostic_trial.py tests/test_diagnostic_trial_ui.py tests/test_two_factor_ui.py tests/test_nexus_account.py tests/test_auth_state.py -q -p no:cacheprovider --junitxml="$RUNNER_TEMP/feature-tests.xml"
+          python -B -m pytest tests/test_updater.py tests/test_server_controller.py tests/test_live_revocation.py tests/test_package_security_boundary.py tests/test_panel_credential_boundary.py tests/test_protection_adversarial.py tests/test_server_pack_review.py tests/test_manifest_profile.py tests/test_preinstall_check.py tests/test_preinstall_ui.py tests/test_design_action_boundary.py tests/test_instance_diagnostics.py tests/test_nested_diagnostics.py tests/test_dependency_versions.py tests/test_diagnostic_version_bindings.py tests/test_instance_diagnostics_ui.py tests/test_diagnostic_versions_ui.py tests/test_diagnostic_workspace_ui.py tests/test_diagnostic_trial.py tests/test_diagnostic_trial_ui.py tests/test_two_factor_ui.py tests/test_nexus_account.py tests/test_auth_state.py -q -p no:cacheprovider --junitxml="$RUNNER_TEMP/feature-tests.xml"
       - name: Collect component notices
         run: |
           curl --fail --location --max-time 180 'https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.8.3-src/pyside-setup-everywhere-src-6.8.3.tar.xz' --output "$RUNNER_TEMP/pyside-source.tar.xz"
@@ -66,8 +66,8 @@ jobs:
         env:
           NEXUS_CANDIDATE_NOTICES: ${{ runner.temp }}/notices
         run: |
-          python -B packaging/prepare_public_variant.py --source . --destination "$RUNNER_TEMP/source-v105" --version 1.0.5
-          python -B -m PyInstaller --noconfirm --distpath "$RUNNER_TEMP/dist" --workpath "$RUNNER_TEMP/pyinstaller-work" "$RUNNER_TEMP/source-v105/packaging/specs/NexusLauncherLinux.spec"
+          python -B packaging/prepare_public_variant.py --source . --destination "$RUNNER_TEMP/source-v106" --version 1.0.6
+          python -B -m PyInstaller --noconfirm --distpath "$RUNNER_TEMP/dist" --workpath "$RUNNER_TEMP/pyinstaller-work" "$RUNNER_TEMP/source-v106/packaging/specs/NexusLauncherLinux.spec"
       - name: Frozen Linux window smoke with Chromium sandbox retained
         env:
           QT_QPA_PLATFORM: xcb
@@ -76,20 +76,20 @@ jobs:
           mkdir "$RUNNER_TEMP/smoke"
           export XDG_DATA_HOME="$RUNNER_TEMP/smoke/data"
           timeout 90s dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/dist/NEXUS-Linux-x64/nexus-launcher" --self-test-report "$RUNNER_TEMP/smoke/result.json" --preinstall-smoke
-          python -c "import json,sys; p=json.load(open(sys.argv[1])); assert p['release_version']=='1.0.5' and p['loaded'] is True and p['application_icon'] is True and not p['script_errors'] and p['preinstall']['visible'] and p['preinstall']['cards']==5,p" "$RUNNER_TEMP/smoke/result.json"
+          python -c "import json,sys; p=json.load(open(sys.argv[1])); assert p['release_version']=='1.0.6' and p['loaded'] is True and p['application_icon'] is True and not p['script_errors'] and p['preinstall']['visible'] and p['preinstall']['cards']==5,p" "$RUNNER_TEMP/smoke/result.json"
       - name: Archive review artifact preserving Unix permissions
         run: |
           cp LICENSE COPYRIGHT.md "$RUNNER_TEMP/dist/NEXUS-Linux-x64/"
           cp packaging/README-Linux.md "$RUNNER_TEMP/dist/NEXUS-Linux-x64/README-Linux.md"
-          tar -C "$RUNNER_TEMP/dist" -czf "$RUNNER_TEMP/NEXUS-1.0.5-Linux-x64.tar.gz" NEXUS-Linux-x64
+          tar -C "$RUNNER_TEMP/dist" -czf "$RUNNER_TEMP/NEXUS-1.0.6-Linux-x64.tar.gz" NEXUS-Linux-x64
           cd "$RUNNER_TEMP"
-          sha256sum NEXUS-1.0.5-Linux-x64.tar.gz > SHA256SUMS-Linux.txt
+          sha256sum NEXUS-1.0.6-Linux-x64.tar.gz > SHA256SUMS-Linux.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: nexus-linux-1.0.5-review
+          name: nexus-linux-1.0.6-review
           retention-days: 5
           path: |
-            ${{ runner.temp }}/NEXUS-1.0.5-Linux-x64.tar.gz
+            ${{ runner.temp }}/NEXUS-1.0.6-Linux-x64.tar.gz
             ${{ runner.temp }}/SHA256SUMS-Linux.txt
             ${{ runner.temp }}/smoke/result.json
             ${{ runner.temp }}/smoke/result.png
