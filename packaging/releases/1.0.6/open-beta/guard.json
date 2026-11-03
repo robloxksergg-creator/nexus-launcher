@@ -1,0 +1,56 @@
+{
+  "release_id": 432415456,
+  "tag": "v1.0.6-preview.1",
+  "body_before_sha256": "892829cbfb17a79417b4f8cada19d97e9c0c6b50314c9016f4914713179fade1",
+  "body_after_sha256": "b7b59ff468a8690c2d2c4abb20ede9abef54d601dab0302277af8909efb8c0c9",
+  "assets": [
+    {
+      "id": 704819207,
+      "name": "NEXUS-1.0.6-Linux-x64.tar.gz",
+      "size": 272371874,
+      "digest": "sha256:6e493062dd439817c3fd0c49a54c0d7d3875595e6a334a26d02c4e6482ccf100"
+    },
+    {
+      "id": 704819204,
+      "name": "NEXUS-1.0.6-macOS-arm64.zip",
+      "size": 212332979,
+      "digest": "sha256:abeef6ff0b70fd1ed071a75ed613c00af56668e6304ea98c63301ec19be0366a"
+    },
+    {
+      "id": 704819209,
+      "name": "NEXUS-Managed-1.0.6-Windows-x64.zip",
+      "size": 221536414,
+      "digest": "sha256:d841a2125bab05ddbf7adb51f259352689f52347633f59432ee8149a8af6de64"
+    },
+    {
+      "id": 704819202,
+      "name": "NEXUS-Setup.exe",
+      "size": 54159599,
+      "digest": "sha256:32be7d7243326e92e5be79fbc88acf045705caffc4f72a96ba33a172e4844d2d"
+    },
+    {
+      "id": 704819253,
+      "name": "portable-envelope.json",
+      "size": 1302930,
+      "digest": "sha256:9fb597e6e711e04a9092e51285e8c4715e56f805d3e4d659b5e7320772fad2fc"
+    },
+    {
+      "id": 704819203,
+      "name": "RELEASE-NOTES.md",
+      "size": 3351,
+      "digest": "sha256:892829cbfb17a79417b4f8cada19d97e9c0c6b50314c9016f4914713179fade1"
+    },
+    {
+      "id": 704819237,
+      "name": "SHA256SUMS.txt",
+      "size": 642,
+      "digest": "sha256:21df3250e76515b2eeb99e71171dfb39b16fef9638e6ec16c9252664453e9b20"
+    },
+    {
+      "id": 704819287,
+      "name": "windows-update-acceptance.json",
+      "size": 794,
+      "digest": "sha256:132f4c5f93cee77051bea89d232bd657eb7826ac13f2e71eb9ee81c4a555b40d"
+    }
+  ]
+}

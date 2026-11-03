@@ -1,0 +1,48 @@
+name: Label existing 1.0.6 release as open beta
+'on':
+  push:
+    branches: [release/open-beta-1.0.6]
+permissions:
+  contents: write
+concurrency:
+  group: nexus-open-beta-1.0.6
+  cancel-in-progress: false
+jobs:
+  label:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Guard release identity and update only title and description
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,hashlib,urllib.request,os,pathlib
+          root='https://api.github.com/repos/robloxksergg-creator/nexus-launcher'
+          headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'}
+          def call(path,body=None):
+            req=urllib.request.Request(root+path,headers=headers,data=None if body is None else json.dumps(body).encode(),method='GET' if body is None else 'PATCH')
+            with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          p=pathlib.Path('packaging/releases/1.0.6/open-beta')
+          guard=json.loads((p/'guard.json').read_text())
+          notes=(p/'NOTES.md').read_text()
+          sha=lambda s:hashlib.sha256(s.encode()).hexdigest()
+          before=call('/releases/tags/'+guard['tag'])
+          assets=lambda r:[{k:a[k] for k in ('id','name','size','digest')} for a in r['assets']]
+          assert before['id']==guard['release_id'] and before['prerelease'] and not before['draft']
+          assert sha(before['body'])==guard['body_before_sha256']
+          assert assets(before)==guard['assets']
+          assert sha(notes)==guard['body_after_sha256']
+          feed=call('/releases/tags/updates-preview')
+          feed_assets=assets(feed)
+          call('/releases/'+str(before['id']),{'name':'NEXUS Launcher 1.0.6 — OPEN BETA / Открытый бета-тест','body':notes,'prerelease':True})
+          after=call('/releases/'+str(before['id']))
+          assert after['prerelease'] and not after['draft'] and sha(after['body'])==guard['body_after_sha256']
+          assert assets(after)==guard['assets']
+          assert after['tag_name']==before['tag_name'] and after['target_commitish']==before['target_commitish']
+          assert assets(call('/releases/tags/updates-preview'))==feed_assets
+          print(json.dumps({'release_id':after['id'],'title':after['name'],'prerelease':after['prerelease'],'assets_unchanged':True,'feed_unchanged':True,'url':after['html_url']},ensure_ascii=False))
+          PY
