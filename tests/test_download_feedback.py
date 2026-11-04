@@ -20,7 +20,7 @@ def event(done, sampled, total=1024**3, phase='download'):
 
 def test_preparation_counts_are_not_network_bytes_or_speed():
     p = page()
-    p.update_progress('Build', 143, 3800)
+    p.update_progress('Build', 143, 3800, unit='steps')
     assert p.bytes.text() == 'Шаги: 143 / 3800'
     assert 'не измеряется' in p.telemetry.text()
     assert p.percent.text() == '3%'

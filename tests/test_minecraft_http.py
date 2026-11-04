@@ -38,3 +38,9 @@ def test_configuration_is_idempotent_and_scoped_away_from_account_requests():
     assert all(isinstance(m.requests, InstallationRequests) for m in (_helper, install, runtime))
     assert requests.Session.request is original
     assert microsoft_account.requests is account_requests
+
+
+def test_module_without_requests_surface_remains_untouched(monkeypatch):
+    monkeypatch.delattr(install, 'requests')
+    configure_installation_http()
+    assert not hasattr(install, 'requests')

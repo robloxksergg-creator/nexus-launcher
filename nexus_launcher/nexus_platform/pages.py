@@ -623,7 +623,9 @@ class DownloadsPage(QWidget):
         self._last_paint = 0.0
         self._last_phase = ""
 
-    def update_progress(self, world_name: str, done: int, total: int, status: str = "") -> None:
+    def update_progress(self, world_name: str, done: int, total: int, status: str = "", *, unit: str = "bytes") -> None:
+        if unit not in {"bytes", "steps"}:
+            raise ValueError("Unknown progress unit")
         if total <= 0:
             self.states.setCurrentWidget(self.empty)
             return
@@ -634,10 +636,10 @@ class DownloadsPage(QWidget):
         self.progress.setValue(done)
         percent = max(0, min(100, int(done * 100 / total)))
         self.percent.setText(f"{percent}%")
-        # The library callback counts preparation steps, not transferred bytes.
-        # Byte telemetry is owned exclusively by DownloadProgress/update_event.
-        self.bytes.setText(f"Шаги: {done} / {total}")
-        self.telemetry.setText("Подготовка файлов · скорость не измеряется")
+        # Library preparation callbacks explicitly select steps. Existing byte
+        # callers retain their contract; measured speed belongs to update_event.
+        self.bytes.setText(f"Шаги: {done} / {total}" if unit == "steps" else f"{self._format_bytes(done)} / {self._format_bytes(total)}")
+        self.telemetry.setText("Подготовка файлов · скорость не измеряется" if unit == "steps" else "Расчёт времени…")
 
     def update_event(self, event, world_name="NEXUS"):
         self._last_paint = time.monotonic()

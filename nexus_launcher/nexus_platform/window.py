@@ -768,7 +768,7 @@ class PlatformLauncher(CoreLauncher):
         self.progress.setVisible(total > 0)
         operation_server = getattr(self, "_launch_server", None)
         world_name = self._world(operation_server.id).title if operation_server else "NEXUS"
-        self.downloads_page.update_progress(world_name, done, total, self.status.text())
+        self.downloads_page.update_progress(world_name, done, total, self.status.text(), unit="steps")
         self.status_bar.set_download(world_name, done, total)
         lowered = self.status.text().lower()
         if total > 0 and not self._download_auto_opened and self._current_page in {"home", "worlds", "world", "library"} and any(marker in lowered for marker in ("скач", "загруз", "устан", "download", "install")):

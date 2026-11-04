@@ -56,7 +56,7 @@ def test_preparation_progress_displays_steps_and_keeps_full_track_visible():
     page = DownloadsPage()
     page.setStyleSheet(stylesheet())
     page.resize(900, 600)
-    page.update_progress("GEARMORPH", 143, 3800)
+    page.update_progress("GEARMORPH", 143, 3800, unit="steps")
     page.show()
     app.processEvents()
     assert page.progress.width() > 600

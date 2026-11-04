@@ -35,5 +35,5 @@ class InstallationRequests:
 def configure_installation_http():
     from minecraft_launcher_lib import _helper, install, runtime
     for module in (_helper, install, runtime):
-        if module.requests is requests:
+        if getattr(module, 'requests', None) is requests:
             module.requests = InstallationRequests()
