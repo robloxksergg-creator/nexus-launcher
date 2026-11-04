@@ -603,6 +603,9 @@ class DownloadsPage(QWidget):
         self.failure_title.setObjectName("downloadTitle")
         self.failure_file = QLabel("")
         self.failure_reason = QLabel("")
+        for label in (self.failure_file, self.failure_reason):
+            label.setTextFormat(Qt.TextFormat.PlainText)
+            label.setWordWrap(True)
         retry = QPushButton("Повторить")
         retry.clicked.connect(lambda: self.retry_requested.emit(getattr(self, "_failed_instance", "")))
         logs = QPushButton("Открыть лог")
@@ -631,7 +634,10 @@ class DownloadsPage(QWidget):
         self.progress.setValue(done)
         percent = max(0, min(100, int(done * 100 / total)))
         self.percent.setText(f"{percent}%")
-        self.bytes.setText(f"{self._format_bytes(done)} / {self._format_bytes(total)}")
+        # The library callback counts preparation steps, not transferred bytes.
+        # Byte telemetry is owned exclusively by DownloadProgress/update_event.
+        self.bytes.setText(f"Шаги: {done} / {total}")
+        self.telemetry.setText("Подготовка файлов · скорость не измеряется")
 
     def update_event(self, event, world_name="NEXUS"):
         self._last_paint = time.monotonic()
@@ -658,6 +664,8 @@ class DownloadsPage(QWidget):
         network_phase = str(event.phase).lower() in {"download", "downloading"}
         samples = self._samples.setdefault(event.operation_id, [])
         if network_phase:
+            if samples and (event.bytes_done < samples[-1][1] or event.sampled_at <= samples[-1][0]):
+                samples.clear()
             samples.append((event.sampled_at, event.bytes_done))
             del samples[:-8]
         speed = 0.0
@@ -666,7 +674,13 @@ class DownloadsPage(QWidget):
         self.current_speed = speed
         if speed > 0 and total and len(samples) >= 3:
             eta = max(0, int((total - event.bytes_done) / speed))
-            self.telemetry.setText(f"{self._format_bytes(int(speed))}/с · осталось ~{eta // 60}:{eta % 60:02d}")
+            if eta > 24 * 60 * 60:
+                remaining = "слишком низкая скорость для оценки времени"
+            elif eta >= 3600:
+                remaining = f"осталось ~{eta // 3600} ч {(eta % 3600) // 60} мин"
+            else:
+                remaining = f"осталось ~{eta // 60}:{eta % 60:02d}"
+            self.telemetry.setText(f"{self._format_bytes(int(speed))}/с · {remaining}")
         elif speed > 0:
             self.telemetry.setText(f"{self._format_bytes(int(speed))}/с · общий размер неизвестен")
         elif network_phase:
@@ -681,12 +695,13 @@ class DownloadsPage(QWidget):
         integrity = any(word in lowered for word in ("sha", "hash", "повреж", "размер файла"))
         storage = any(word in lowered for word in ("space", "disk", "мест"))
         self.failure_title.setText("Проверка файла не пройдена" if integrity else ("Недостаточно места" if storage else "Не удалось загрузить файл"))
-        self.failure_file.setText(event.current_file if event and event.current_file else "Текущий файл не определён")
+        failed_file = reason.partition('; файл: ')[2].partition('; причина:')[0] if reason.startswith('Источник загрузки: ') else ''
+        self.failure_file.setText(failed_file or (event.current_file if event and event.current_file else "Текущий файл не определён"))
         kind = "integrity" if integrity else ("storage" if storage else "network")
         self.failure_reason.setText(
             "Nexus не будет использовать повреждённый файл." if kind == "integrity"
             else ("Освободите место в папке установки и повторите попытку." if kind == "storage"
-                  else "Проверьте подключение к интернету и повторите попытку.")
+                  else reason if reason.startswith('Источник загрузки: ') else "Проверьте подключение к интернету и повторите попытку.")
         )
         self.failure_reason.setToolTip(reason)
         self.states.setCurrentWidget(self.failure)

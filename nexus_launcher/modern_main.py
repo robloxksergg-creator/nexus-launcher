@@ -2121,8 +2121,9 @@ class Launcher(QMainWindow):
             )
 
     def _failed(self, text):
+        from nexus_launcher.launch_feedback import launch_failure_message
         self._reset_play()
-        QMessageBox.critical(self, "NEXUS Launcher", text)
+        QMessageBox.critical(self, "NEXUS Launcher", launch_failure_message(text))
 
 
 def main():

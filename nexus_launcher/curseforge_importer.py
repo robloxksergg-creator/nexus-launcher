@@ -8,7 +8,9 @@ import os
 import re
 import tempfile
 import time
+import threading
 import urllib.parse
+import urllib.error
 import urllib.request
 import zipfile
 from collections.abc import Callable
@@ -221,11 +223,7 @@ class CurseForgeImporter:
         file_references = self._fixed_references(payload.get("files", []))
         total = len(file_references) + 1
         self.log(f"Импорт {info.name}: {info.mod_count} модов")
-        for index, file_ref in enumerate(file_references, 1):
-            record = self._download_mod(staging / "mods", file_ref)
-            records.append(record)
-            self.progress(index, total)
-            self.log(f"Загрузка модов: {index} / {len(file_references)} — {Path(record['path']).name}")
+        records.extend(self._stage_downloads(staging, file_references, total))
         self._extract_overrides(archive_path, staging, info.overrides, records)
         self.progress(total, total)
         self._validate_jars(staging)
@@ -245,6 +243,36 @@ class CurseForgeImporter:
         self._apply(staging, records, state)
         self.log(f"Сборка {info.name} установлена")
         return state
+
+    def _stage_downloads(self, staging, references, total):
+        from nexus_launcher.parallel_downloads import run_staged
+        lock = threading.Lock()
+        completed = [0]
+
+        def download(job):
+            index, reference = job
+            # Filename collisions cannot race: each reference has its own
+            # directory until every transfer and digest check has succeeded.
+            root = checked_path(staging, f"download-jobs/{index}")
+            record = self._download_mod(root / 'mods', reference)
+            with lock:
+                completed[0] += 1
+                self.progress(completed[0], total)
+                self.log(f"Загрузка модов: {completed[0]} / {len(references)} — {Path(record['path']).name}")
+            return index, root, record
+
+        downloaded = sorted(run_staged(enumerate(references), download, lambda _: 'www.curseforge.com'))
+        paths = [record['path'].casefold() for _, _, record in downloaded]
+        if len(paths) != len(set(paths)):
+            raise ValueError('Разные моды используют одинаковый путь; установка отменена')
+        records = []
+        for _, root, record in downloaded:
+            source = checked_path(root, record['path'])
+            target = checked_path(staging, record['path'])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            replace_file(source, target)
+            records.append(record)
+        return records
 
     def _fixed_references(self, references: list[dict]) -> list[dict]:
         fixes = PACK_FIXES.get(self.pack_id, {})
@@ -357,8 +385,13 @@ class CurseForgeImporter:
                 last_error = error
                 if temporary is not None:
                     checked_path(mods_dir, temporary.name).unlink(missing_ok=True)
+                if isinstance(error, urllib.error.HTTPError) and error.code in {400, 401, 403, 404, 429}:
+                    break
                 if attempt < 2:
                     time.sleep(1 + attempt * 2)
+        if isinstance(last_error, (urllib.error.URLError, TimeoutError, ConnectionError)):
+            from nexus_launcher.download_sources import transfer_error
+            raise RuntimeError(str(transfer_error(url, f"CurseForge fileID {file_id}", last_error))) from last_error
         raise RuntimeError(f"Не удалось загрузить CurseForge fileID {file_id}: {last_error}") from last_error
 
     def _extract_overrides(self, archive_path: Path, staging: Path, root: str, records: list[dict]) -> None:

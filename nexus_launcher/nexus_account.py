@@ -175,6 +175,9 @@ class NexusAccountClient:
                             and fields.get('twoFactorRequired') is True)
             if mfa_required:
                 error_type = AccountError
+            if message == 'GAME_TICKET_UNAVAILABLE':
+                from nexus_launcher.launch_feedback import launch_failure_message
+                message = launch_failure_message(message)
             raise error_type(message or "Сервер аккаунтов отклонил запрос.",
                              code="MFA_REQUIRED" if mfa_required else fields.get("code"), setup_url=fields.get("setupUrl"),
                              http_status=http_status, outcome=outcome) from error

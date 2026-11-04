@@ -71,6 +71,8 @@ def java_major(java: str) -> int:
 
 class MinecraftLauncher:
     def __init__(self, game_dir: Path, log: Log = print, progress: Progress = lambda *_: None):
+        from nexus_launcher.minecraft_http import configure_installation_http
+        configure_installation_http()
         self.game_dir = game_dir.resolve()
         self.log = log
         self.progress = progress

@@ -771,7 +771,7 @@ class PlatformLauncher(CoreLauncher):
         self.downloads_page.update_progress(world_name, done, total, self.status.text())
         self.status_bar.set_download(world_name, done, total)
         lowered = self.status.text().lower()
-        if total > 0 and not self._download_auto_opened and self._current_page == "world" and any(marker in lowered for marker in ("скач", "загруз", "устан")):
+        if total > 0 and not self._download_auto_opened and self._current_page in {"home", "worlds", "world", "library"} and any(marker in lowered for marker in ("скач", "загруз", "устан", "download", "install")):
             self._download_auto_opened = True
             self._navigate("downloads", "NEXUS / ЗАГРУЗКИ")
         if operation_server:
@@ -784,6 +784,9 @@ class PlatformLauncher(CoreLauncher):
         except (KeyError, StopIteration):
             world_name = event.instance_id or "NEXUS"
         self.downloads_page.update_event(event, world_name)
+        if str(event.phase).lower() in {"download", "downloading"} and not self._download_auto_opened and self._current_page in {"home", "worlds", "world", "library"}:
+            self._download_auto_opened = True
+            self._navigate("downloads", "NEXUS / ЗАГРУЗКИ")
         if event.bytes_total:
             self.status_bar.set_download(world_name, event.bytes_done, event.bytes_total, self.downloads_page.current_speed)
         state = {

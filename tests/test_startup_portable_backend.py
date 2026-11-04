@@ -1,4 +1,5 @@
 import hashlib
+import http.client
 import io
 import json
 from pathlib import Path
@@ -104,6 +105,41 @@ class Response(io.BytesIO):
     pass
 
 
+def test_package_resume_keeps_signed_hash_and_cleans_owned_partial_on_bad_range(tmp_path):
+    transport = PackageTransport("https://example.test/feed", allowed_hosts={"example.test"})
+    content = b"verified package fixture"
+    payload = {"url": "https://example.test/package.zip", "size": len(content),
+               "sha256": hashlib.sha256(content).hexdigest()}
+    calls = []
+    class Broken(Response):
+        headers = {"Content-Length": str(len(content))}
+        def read1(self, amount):
+            if self.tell(): raise http.client.IncompleteRead(b'', len(content)-5)
+            return super().read1(5)
+    def opened(url, offset=0):
+        calls.append(offset)
+        if not offset: return Broken(content)
+        result = Response(content[offset:])
+        result.status = 206
+        result.headers = {"Content-Range": f"bytes {offset}-{len(content)-1}/{len(content)}",
+                          "Content-Length": str(len(content)-offset)}
+        return result
+    transport._open = opened
+    target = transport.download(payload, tmp_path, lambda *_: None)
+    assert calls == [0, 5]
+    assert target.read_bytes() == content
+    target.unlink()
+    calls.clear()
+    def wrong_range(url, offset=0):
+        result = opened(url, offset)
+        if offset: result.headers['Content-Range'] = 'bytes 0-1/2'
+        return result
+    transport._open = wrong_range
+    with pytest.raises(ValueError, match='range'):
+        transport.download(payload, tmp_path, lambda *_: None)
+    assert not list(tmp_path.glob('package-*.zip'))
+
+
 def test_full_inventory_manifest_can_exceed_legacy_limit_but_remains_bounded():
     transport = PackageTransport("https://example.test/feed", allowed_hosts={"example.test"})
     content = {"fixture": "x" * (160 * 1024)}
@@ -120,7 +156,7 @@ def test_full_inventory_manifest_can_exceed_legacy_limit_but_remains_bounded():
 ])
 def test_transport_bounds_hashes_and_cleans_only_owned_partial(tmp_path, body, declared, good_hash, success):
     transport = PackageTransport("https://example.test/feed", allowed_hosts={"example.test"})
-    transport._open = lambda _: Response(body)
+    transport._open = lambda _, offset=0: Response(body)
     sentinel = tmp_path / "user-file"
     sentinel.write_bytes(b"preserve")
     payload = {"url": "https://example.test/package.zip", "size": declared,

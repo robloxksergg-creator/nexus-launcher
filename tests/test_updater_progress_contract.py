@@ -44,3 +44,24 @@ def test_download_ui_uses_nullable_total_and_real_sample_speed():
     page.show_failure("SHA-256 mismatch")
     assert "Проверка" in page.failure_title.text()
     assert page.failure_file.text() == "mods/a.jar"
+
+
+def test_preparation_progress_displays_steps_and_keeps_full_track_visible():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    from nexus_launcher.nexus_platform.pages import DownloadsPage
+    from nexus_launcher.nexus_platform.presentation_style import stylesheet
+    app = QApplication.instance() or QApplication([])
+    page = DownloadsPage()
+    page.setStyleSheet(stylesheet())
+    page.resize(900, 600)
+    page.update_progress("GEARMORPH", 143, 3800)
+    page.show()
+    app.processEvents()
+    assert page.progress.width() > 600
+    assert not page.progress.isTextVisible()
+    assert page.percent.text() == "3%"
+    assert page.bytes.text() == "Шаги: 143 / 3800"
+    assert "не измеряется" in page.telemetry.text()
+    page.close()

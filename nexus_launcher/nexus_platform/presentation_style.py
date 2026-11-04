@@ -80,7 +80,7 @@ def stylesheet():
     QTabBar::tab:hover {{ background:{t['hover']}; }}
     QCheckBox::indicator {{ width:18px; height:18px; border:1px solid {t['border']}; border-radius:5px; background:{t['sidebar']}; }}
     QCheckBox::indicator:checked {{ background:{t['accent']}; border:3px solid {t['wash']}; }}
-    QProgressBar {{ background:{t['surface']}; border:0; border-radius:4px; min-height:8px; text-align:center; }}
+    QProgressBar {{ background:{t['sidebar']}; border:1px solid {t['border']}; border-radius:4px; min-height:8px; text-align:center; }}
     QProgressBar::chunk {{ background:{t['accent']}; border-radius:4px; }}
     QScrollArea {{ background:transparent; border:0; }}
     QScrollArea > QWidget > QWidget {{ background:transparent; }}

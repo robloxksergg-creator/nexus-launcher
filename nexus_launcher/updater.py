@@ -10,6 +10,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 import uuid
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -488,25 +489,20 @@ class ModpackUpdater:
         ensure_space(self.state_dir, MAX_PACK_BYTES)
         fd, temp_name = tempfile.mkstemp(prefix="pack-", suffix=".part", dir=self.state_dir)
         temporary = Path(temp_name)
-        request = urllib.request.Request(release.url, headers={"User-Agent": "NexusLauncher/1.0"})
         try:
-            with (
-                os.fdopen(fd, "wb") as output,
-                open_https(request, timeout=60, allowed_hosts=trusted_download_hosts()) as response,
-            ):
-                total = int(response.headers.get("Content-Length", "0"))
-                if total > MAX_PACK_BYTES:
-                    raise ValueError("Сборка больше допустимого размера 1 ГБ")
-                done = 0
-                deadline = time.monotonic() + 300
-                while block := getattr(response, "read1", response.read)(1024 * 1024):
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError("Pack download deadline exceeded")
-                    done += len(block)
-                    if done > MAX_PACK_BYTES:
-                        raise ValueError("Сборка больше допустимого размера 1 ГБ")
-                    output.write(block)
-                    self._emit_progress("download", release.pack or None, done, total)
+            from nexus_launcher.resumable_download import receive
+            def open_response(offset):
+                headers = {"User-Agent": "NexusLauncher/1.0", "Accept-Encoding": "identity"}
+                if offset:
+                    headers["Range"] = f"bytes={offset}-"
+                request = urllib.request.Request(release.url, headers=headers)
+                return open_https(request, timeout=60, allowed_hosts=trusted_download_hosts())
+
+            with os.fdopen(fd, "w+b") as output:
+                receive(output, open_response, size=0, limit=MAX_PACK_BYTES,
+                        progress=lambda done, total: self._emit_progress("download", release.pack or None, done, total))
+                output.flush()
+                os.fsync(output.fileno())
             if sha256_file(temporary) != release.sha256:
                 raise ValueError("SHA-256 сборки не совпадает. Обновление отменено.")
             replace_file(temporary, self._path(target.relative_to(self.game_dir).as_posix()))
@@ -820,7 +816,8 @@ class ModpackUpdater:
             for relative, digest in managed.items()
         )
 
-    def _download_file(self, entry: PackFile, temporary: Path, transferred: list[int], total: int) -> int:
+    def _download_file(self, entry: PackFile, temporary: Path, transferred: list[int], total: int, *, emit=None) -> int:
+        report = emit or self._emit_progress
         temporary.parent.mkdir(parents=True, exist_ok=True)
         last_error: Exception | None = None
         for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
@@ -850,7 +847,7 @@ class ModpackUpdater:
                             while prefix_block := prefix.read(1024 * 1024):
                                 verifier.update(prefix_block)
                     with temporary.open(mode) as output:
-                        self._emit_progress("downloading", entry.path, transferred[0] + received, total, attempt)
+                        report("downloading", entry.path, transferred[0] + received, total, attempt)
                         deadline = time.monotonic() + 300
                         while block := getattr(response, "read1", response.read)(1024 * 1024):
                             if time.monotonic() >= deadline:
@@ -860,11 +857,11 @@ class ModpackUpdater:
                                 raise ValueError(f"Файл слишком большой: {entry.name}")
                             verifier.update(block)
                             output.write(block)
-                            self._emit_progress("downloading", entry.path, min(total, transferred[0] + received), total, attempt)
+                            report("downloading", entry.path, min(total, transferred[0] + received) if total else transferred[0] + received, total, attempt)
                         output.flush()
                         os.fsync(output.fileno())
                 self.log(f"VERIFYING • {entry.name}")
-                self._emit_progress("verifying", entry.path, transferred[0] + received, total, attempt)
+                report("verifying", entry.path, transferred[0] + received, total, attempt)
                 if entry.size and received != entry.size:
                     raise ValueError(f"Размер файла не совпадает: {entry.name}")
                 try:
@@ -884,10 +881,15 @@ class ModpackUpdater:
                 return received
             except Exception as error:
                 last_error = error
+                if isinstance(error, urllib.error.HTTPError) and error.code in {400, 401, 403, 404, 429}:
+                    break  # Refusal/rate limit: no immediate automatic retry.
                 if attempt < DOWNLOAD_ATTEMPTS:
                     self.log(f"Повтор загрузки {entry.name}: {attempt + 1}/{DOWNLOAD_ATTEMPTS}")
                     time.sleep(0.25 * attempt)
         assert last_error is not None
+        if isinstance(last_error, (urllib.error.URLError, TimeoutError, ConnectionError)):
+            from nexus_launcher.download_sources import transfer_error
+            raise transfer_error(entry.url, entry.path, last_error) from last_error
         raise last_error
 
     def _sync_files(self, release: PackRelease, force: bool = False) -> None:
@@ -950,19 +952,31 @@ class ModpackUpdater:
             remove_owned_tree(self.game_dir, STATE_DIR + "/backup-files")
         changed: list[str] = []
         deleted: list[str] = []
-        total = sum(max(0, entry.size) for entry in pending)
+        total = sum(entry.size for entry in pending) if all(entry.size for entry in pending) else 0
         transferred = [0]
         staged: dict[str, Path] = {}
         try:
-            for entry in pending:
+            from nexus_launcher.parallel_downloads import run_staged
+            progress_lock = threading.Lock()
+            amounts = {}
+
+            def stage_entry(entry):
+                def report(phase, path, done, file_total, attempt=1):
+                    with progress_lock:
+                        amounts[entry.path] = min(entry.size, done) if entry.size else done
+                        # Other jobs can still be receiving bytes while this
+                        # file is being verified. The overall phase stays download.
+                        self._emit_progress("downloading", path, sum(amounts.values()), total, attempt)
                 self.log(f"DOWNLOADING • {entry.name}")
                 stage = self._stage_path(release, entry)
                 if stage.is_file() and (not entry.size or stage.stat().st_size == entry.size) and sha256_file(stage) == entry.sha256:
-                    transferred[0] += stage.stat().st_size
-                    self._emit_progress("verifying", entry.path, transferred[0], total)
+                    report("verifying", entry.path, stage.stat().st_size, entry.size)
                 else:
-                    self._download_file(entry, stage, transferred, total)
-                staged[entry.path] = stage
+                    self._download_file(entry, stage, [0], entry.size, emit=report)
+                return entry.path, stage
+
+            staged.update(run_staged(pending, stage_entry, lambda entry: urllib.parse.urlsplit(entry.url).hostname))
+            transferred[0] = sum(path.stat().st_size for path in staged.values())
             self.log("APPLYING • проверенные файлы")
             self._emit_progress("applying", None, transferred[0], total)
             self._write_transaction([entry.path for entry in pending], removed)

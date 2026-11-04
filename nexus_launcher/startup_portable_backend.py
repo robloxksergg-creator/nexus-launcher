@@ -5,6 +5,7 @@ EXE-only updater. Callers must supply a reviewed native health adapter. This
 module does not migrate the distributed RC4 layout or publish releases.
 """
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -16,7 +17,7 @@ from nexus_launcher.portable_bootstrap import run_prepared_transition
 from nexus_launcher.portable_package import (MAX_TOTAL_BYTES, _verify_staged_files, stage_portable_archive,
                               verify_installed_inventory, verify_portable_inventory)
 from nexus_launcher.portable_transition import _pointer, _read, prepare_transition
-from nexus_launcher.resource_limits import MAX_RESPONSE_BYTES, copy_limited, ensure_space, read_limited
+from nexus_launcher.resource_limits import MAX_RESPONSE_BYTES, ensure_space, read_limited
 from nexus_launcher.safe_paths import checked_path, pinned_directory
 from nexus_launcher.secure_http import open_https, origin
 from nexus_launcher.signed_release import verify_envelope
@@ -39,10 +40,12 @@ class PackageTransport:
         if host not in self.allowed_hosts:
             raise ValueError("Untrusted package origin")
 
-    def _open(self, url):
+    def _open(self, url, offset=0):
         self._validate(url)
-        return open_https(urllib.request.Request(url, headers={"User-Agent": "NEXUS-Package-Bootstrap/1",
-                                                              "Accept-Encoding": "identity"}),
+        headers={"User-Agent": "NEXUS-Package-Bootstrap/1", "Accept-Encoding": "identity"}
+        if offset:
+            headers["Range"] = f"bytes={offset}-"
+        return open_https(urllib.request.Request(url, headers=headers),
                           timeout=self.timeout, allowed_hosts=self.allowed_hosts)
 
     def manifest(self):
@@ -62,21 +65,19 @@ class PackageTransport:
             fd, name = tempfile.mkstemp(prefix="package-", suffix=".zip", dir=cache)
             target = Path(name)
             try:
+                from nexus_launcher.resumable_download import receive
                 digest = hashlib.sha256()
-                with os.fdopen(fd, "wb") as output, self._open(payload["url"]) as response:
-                    class ProgressReader:
-                        done = 0
-
-                        def read(self, amount):
-                            block = getattr(response, "read1", response.read)(amount)
-                            self.done += len(block)
-                            if self.done <= size:
-                                progress(self.done, size)
-                            return block
-
-                    actual = copy_limited(ProgressReader(), output, limit=size, digest=digest, timeout=300)
+                with os.fdopen(fd, "w+b") as output:
+                    try:
+                        actual = receive(output, lambda offset: self._open(payload["url"], offset) if offset else self._open(payload["url"]),
+                                         size=size, limit=size, progress=progress)
+                    except http.client.IncompleteRead as error:
+                        raise ValueError("Downloaded package is incomplete after retries") from error
                     output.flush()
                     os.fsync(output.fileno())
+                    output.seek(0)
+                    while block := output.read(256 * 1024):
+                        digest.update(block)
                 if actual != size or digest.hexdigest() != payload["sha256"]:
                     raise ValueError("Downloaded package integrity mismatch")
                 return target

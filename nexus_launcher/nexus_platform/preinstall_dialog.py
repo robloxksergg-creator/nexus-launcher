@@ -10,6 +10,7 @@ from .presentation_style import stylesheet
 from .theme_tokens import TOKENS
 
 SCAN_ACCENT = '#35c8df'  # Owner-selected diagnostic accent; shared buttons/theme remain canonical.
+SYSTEM_HEADINGS = ('Оперативная память','Место для установки','Java Runtime','Связь с сервером','FPS и скорость загрузки')
 STATE_LABELS = {'ok':'ПРОВЕРЕНО','info':'СВЕДЕНИЯ','warning':'ОБРАТИТЕ ВНИМАНИЕ','unknown':'НЕ ПОДТВЕРЖДЕНО'}
 STATE_COLORS = {'ok':TOKENS['success'], 'warning':TOKENS['warning'], 'info':TOKENS['accent'], 'unknown':TOKENS['muted'], 'brand':SCAN_ACCENT}
 
@@ -70,7 +71,7 @@ class PreinstallDialog(NexusDialog):
         self.setObjectName('platformRoot'); self.setStyleSheet(stylesheet()+report_style())
         screen = QApplication.primaryScreen().availableGeometry()
         self.resize(min(920, int(screen.width()*.94)), min(740, int(screen.height()*.94)))
-        self.worker = None; self.closing = False
+        self.worker = None; self.closing = False; self._source_mode = False
         self.operation = operation or (lambda cancelled: collect(server, storage_root, java_path=java_path, allocated_mb=allocated_mb, cancelled=cancelled))
         root = QVBoxLayout(self); root.setContentsMargins(20,16,20,16); root.setSpacing(12)
         brand=QHBoxLayout(); brand.setSpacing(10); brand.addWidget(ProbeIcon('brand'))
@@ -89,44 +90,61 @@ class PreinstallDialog(NexusDialog):
         self.status = QLabel('Нажмите «Начать проверку». Это предварительный отчёт, не допуск к серверу и не прогноз FPS.')
         self.status.setObjectName('scanCaption');self.status.setWordWrap(True); root.addWidget(self.status)
         root.addWidget(divider())
-        section=QLabel('КОМПОНЕНТЫ СИСТЕМЫ');section.setObjectName('probeHeading');root.addWidget(section)
+        self.section_heading=QLabel('КОМПОНЕНТЫ СИСТЕМЫ');self.section_heading.setObjectName('probeHeading');root.addWidget(self.section_heading)
         scroll = QScrollArea(); self.scroll=scroll; scroll.setWidgetResizable(True); scroll.setFrameShape(QFrame.Shape.NoFrame)
         content = QWidget(); self.cards = QVBoxLayout(content); self.cards.setContentsMargins(0,0,0,0); self.cards.setSpacing(12); self.cards.addStretch()
         scroll.setWidget(content); root.addWidget(scroll,1)
-        self.labels, self.details, self.icons = [], [], []
-        for number, heading in enumerate(['Оперативная память','Место для установки','Java Runtime','Связь с сервером','FPS и скорость загрузки'],1):
+        self.labels, self.details, self.icons, self.headings = [], [], [], []
+        for number, heading in enumerate(SYSTEM_HEADINGS,1):
             item=QWidget();row_layout=QHBoxLayout(item);row_layout.setContentsMargins(0,0,0,0);row_layout.setSpacing(12)
             timeline=QVBoxLayout();timeline.setSpacing(6)
             number_label=QLabel(f'{number:02}');number_label.setObjectName('probeNumber');number_label.setAlignment(Qt.AlignmentFlag.AlignHCenter);timeline.addWidget(number_label)
             rail=QFrame();rail.setObjectName('probeRail');rail.setFixedWidth(1);timeline.addWidget(rail,1,Qt.AlignmentFlag.AlignHCenter);row_layout.addLayout(timeline)
             frame = QFrame(); frame.setObjectName('preinstallCard'); layout = QVBoxLayout(frame); layout.setContentsMargins(14,12,14,12);layout.setSpacing(6)
             heading_label = QLabel(heading); heading_label.setObjectName('probeHeading'); heading_label.setWordWrap(True); layout.addWidget(heading_label)
+            self.headings.append(heading_label)
             value_row=QHBoxLayout();value_row.setSpacing(6);icon=ProbeIcon();value_row.addWidget(icon,0,Qt.AlignmentFlag.AlignTop)
             detail = QLabel('Не измерено');detail.setObjectName('probeValue'); detail.setTextFormat(Qt.TextFormat.PlainText); detail.setWordWrap(True);detail.setStyleSheet('color:'+TOKENS['muted']); detail.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse);value_row.addWidget(detail,1);layout.addLayout(value_row)
             explanation=QLabel('');explanation.setObjectName('probeDetails');explanation.setTextFormat(Qt.TextFormat.PlainText);explanation.setWordWrap(True);explanation.hide();layout.addWidget(explanation)
             row_layout.addWidget(frame,1);self.cards.insertWidget(self.cards.count()-1,item)
             self.labels.append(detail);self.details.append(explanation);self.icons.append(icon)
         note=QLabel('Без запуска игры и установки. Java проверяется через -version; неизвестные данные не считаются успешной проверкой.')
+        self.note = note
         note.setObjectName('scanCaption');note.setWordWrap(True);root.addWidget(note)
         root.addWidget(divider())
         row = QHBoxLayout(); row.addStretch()
+        self.sources_button = QPushButton('Источники загрузки')
+        def check_sources():
+            from nexus_launcher.download_sources import collect_sources, sources
+            if self.worker is not None: return
+            for label, source in zip(self.headings, sources(getattr(server, 'loader', 'neoforge'))):
+                label.setText(source.name)
+            self.start(lambda cancelled: collect_sources(server, cancelled=cancelled))
+        self.sources_button.clicked.connect(check_sources)
         self.start_button = QPushButton('Начать проверку'); self.start_button.setObjectName('primaryAction'); self.start_button.clicked.connect(self.start)
         self.close_button = QPushButton('Закрыть'); self.close_button.clicked.connect(self.reject)
+        root.addWidget(self.sources_button)
         row.addWidget(self.close_button); row.addWidget(self.start_button); root.addLayout(row)
-    def start(self):
+    def start(self, operation=None):
         if self.worker is not None: return
         self.closing = False
+        self._source_mode = callable(operation)
+        if not self._source_mode:
+            for label, title in zip(self.headings, SYSTEM_HEADINGS): label.setText(title)
+        self.section_heading.setText('ИСТОЧНИКИ ЗАГРУЗКИ' if self._source_mode else 'КОМПОНЕНТЫ СИСТЕМЫ')
+        self.note.setText('Без входа в аккаунт и скачивания файлов. Ответ относится к проверенному адресу, а не ко всем файлам источника.' if self._source_mode else 'Без запуска игры и установки. Java проверяется через -version; неизвестные данные не считаются успешной проверкой.')
         for label, explanation, icon in zip(self.labels,self.details,self.icons):
             label.setText('Проверяется…');label.setStyleSheet('color:'+TOKENS['muted']);explanation.clear();explanation.hide();icon.set_state('unknown')
         self.scan_badge.setText('СКАНИРОВАНИЕ')
         self.status.setText('Проверка выполняется в фоне. Можно отменить; текущий системный запрос должен завершиться.')
-        self.start_button.setEnabled(False); self.progress.show(); self.close_button.setText('Отменить')
-        self.worker = CheckWorker(self.operation,self)
+        self.start_button.setEnabled(False); self.sources_button.setEnabled(False); self.progress.show(); self.close_button.setText('Отменить')
+        self.worker = CheckWorker(operation if callable(operation) else self.operation,self)
         self.worker.result.connect(self.received); self.worker.failed.connect(self.failed); self.worker.finished.connect(self._worker_finished)
         self.worker.start()
     def received(self, report):
         if self.closing: return
         for index, item in enumerate(report.checks[:len(self.labels)]):
+            self.headings[index].setText(item.title)
             main, separator, explanation = item.detail.partition('. ')
             self.labels[index].setText(STATE_LABELS[item.state]+' · '+main+('.' if separator else ''))
             self.labels[index].setStyleSheet('color:'+STATE_COLORS[item.state]);self.icons[index].set_state(item.state)
@@ -145,7 +163,7 @@ class PreinstallDialog(NexusDialog):
     def _worker_finished(self):
         worker = self.worker; self.worker = None
         if worker: worker.deleteLater()
-        self.progress.hide(); self.start_button.setEnabled(True); self.start_button.setText('Проверить ещё раз'); self.close_button.setText('Закрыть')
+        self.progress.hide(); self.start_button.setEnabled(True); self.sources_button.setEnabled(True); self.start_button.setText('Проверить компьютер' if self._source_mode else 'Проверить ещё раз'); self.close_button.setText('Закрыть')
         if self.closing: super().reject()
     def reject(self):
         if self.worker is not None:

@@ -48,6 +48,20 @@ class DialogTests(unittest.TestCase):
         d=self.make(operation);d.start_button.click();self.wait_idle()
         self.assertEqual(d.scan_badge.text(),'ПРЕРВАНО')
         self.assertNotIn('SECRET',d.status.text());self.assertTrue(all('SECRET' not in x.text() for x in d.labels));self.assertTrue(d.start_button.isEnabled())
+    def test_sources_are_explicit_and_use_same_cancelable_worker(self):
+        from unittest.mock import patch
+        calls=[]
+        def source_report(server, *, cancelled):
+            calls.append(True)
+            return Report(tuple(Check(f'source-{i}',f'Source {i}','unknown','HTTP_503. Скорость не измерялась.') for i in range(5)),time.time())
+        d=self.make(lambda _:self.fail('system probe was not requested'))
+        self.assertEqual(calls,[])
+        with patch('nexus_launcher.download_sources.collect_sources',side_effect=source_report):
+            d.sources_button.click();self.wait_idle()
+        self.assertEqual(calls,[True]);self.assertEqual(d.headings[0].text(),'Source 0')
+        self.assertIn('HTTP_503',d.labels[0].text());self.assertTrue(d.sources_button.isEnabled())
+        self.assertEqual(d.section_heading.text(),'ИСТОЧНИКИ ЗАГРУЗКИ')
+        self.assertEqual(d.start_button.text(),'Проверить компьютер')
     def test_closing_waits_for_owned_worker_without_termination(self):
         entered=threading.Event()
         def operation(cancelled):

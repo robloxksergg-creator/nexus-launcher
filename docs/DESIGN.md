@@ -275,8 +275,50 @@ tester surface. Nickname prefill and password focus reuse NexusLogin; no new
 visual tokens, renderer credentials or authentication authority are introduced.
 System keyring failures use existing account-error feedback and unblock retry.
 
+## Owner-selected brand and installer completion — 2026-11-01
+`assets/nexus-mark.svg` owns the blue folded N selected by the owner. `packaging/build_brand_icons.py` renders native ICO/PNG/ICNS variants; these are not independent logo designs. The shared native title bar and UI2 brand slot reuse that mark. User avatars and world artwork remain their own assets. `installer_completion.py` owns the dedicated navy/blue completion presentation requested by the owner; the common launcher palette is unchanged. Completion is shown only after the receipt and selected signed package are reverified. Version, folder and file totals come from that package. Shortcut creation is opt-in, per-user and non-overwriting; no elevation or trust override is introduced.
+
+
+## Skin preview pixel geometry (2026-11-01)
+
+The shared approved-ui skin renderer owns both launcher profile surfaces. Skin texels remain nearest-neighbour. Zoom changes displayed cuboid geometry rather than enlarging a pre-composited tiny canvas; avatar geometry uses the same rule. Classic/Slim UVs, local-only PNG delivery, neutral fallback and keyboard rotation remain intact. This is a renderer correction, not a change to account skins or skin history.
+
+
+## Instance diagnostics — first read-only slice (2026-11-01)
+
+The shared InstanceDiagnosticsDialog is reached from personal instance mods and the managed-world mods page. It uses canonical NEXUS tokens/chrome and an explicit, cancellable background scan. Findings expose evidence and uncertainty; the dependency tree describes declarations, not proven version compatibility. Unreadable inputs and scan limits produce incomplete reports. Crash-reported mod IDs are candidates, never proven causes. No scan mutates files, sends logs, runs JARs, grants security authority or automatically disables a mod. Repair and rollback need a later separately tested action boundary.
+
+
+## Confirmed diagnostic trial copies (2026-11-01)
+
+Personal-pack diagnostics can prepare an explicit one-mod exclusion plan and create an independent trial copy after confirmation. Original game files and manifest are read-only to the copy operation. Source hashes are checked before and after copying; changed plans fail. Trial files stay under a hidden staging owner until verification and directory publication. Caches, logs and backup archives are excluded. Returning means selecting the original, not merging trial saves. The existing launcher launch lock and owned process block this operation; externally launched games remain outside that guard and must be closed by the user. Managed worlds remain read-only. Creating a copy does not establish a successful repair or game launch.
+
+
+## Declared dependency version conditions (2026-11-01)
+
+Diagnostics compares bounded numeric declarations, not complete runtime compatibility. Fabric operators/AND/OR, caret/tilde and X-ranges follow the Fabric specification; Maven hard numeric intervals/unions are handled separately. Maven soft bare versions, prereleases, unresolved placeholders, ambiguous providers, aliases without their own version, incomplete/nested inventories and Fabric override files remain UNKNOWN. Runtime versions are not inferred from configured values. Each dependency row names its declared condition, reported version and a textual MATCH/MISMATCH/UNKNOWN explanation; only mismatches add an actionable warning. Trial copies do not infer successful repairs from a matching condition.
+
+Reference semantics: https://wiki.fabricmc.net/documentation:fabric_mod_json_spec#versionrange and https://maven.apache.org/pom.html#Dependency_Version_Requirement_Specification . No third-party implementation or new dependency was copied.
+
+
+## Diagnostics workspace refinement (2026-11-01)
+
+InstanceDiagnosticsDialog keeps the canonical theme_tokens palette and NexusDialog chrome. A three-part summary reports read JARs, findings and unchecked version conditions; it is not a compatibility score. Severity-labelled result rows lead to a separate, selectable evidence panel. Below 820 logical pixels the same splitter becomes vertical; the action bar and tab ownership remain unchanged. The indeterminate progress rail ends on failure or cancellation as well as success. TrialReviewDialog uses the same heading hierarchy and retains explicit confirmation, source/destination paths and independent-save warning. No scan, trial-copy or admission semantics change.
+
+
+## Related diagnostics workspaces (2026-11-01)
+
+DiagnosticEntryCard is the shared native entry from personal and managed mod inventories, using the canonical presentation_style adapter. Managed scope is explicitly read-only. Inventory rows name enabled/disabled status in text, keep the current search after refresh and expose a clear action. Nested candidates have their own source-linked tab; neither a read candidate nor its declared version establishes loader selection. A confirmed trial result has a separate panel with copy/original navigation and independent-save caveats. Signals, mutation guards, backend selection and managed-pack authority are unchanged.
+
+
+## Optional login second factor (development)
+Native login retains NexusDialog, shared password visibility and presentation tokens. The optional masked factor field switches between authenticator and recovery-code input, is cleared on reading or cancellation and is passed only to the native account client. AuthState distinguishes a factor challenge from a revoked stored session. No credentials or factor secrets enter the web renderer. Server deployment and native release remain separate acceptance steps.
+
 ## Pre-install preparation report
 The existing world hero and Qt WorldPage expose “Проверить перед установкой”. A native NexusDialog uses shared presentation tokens, five vertically scrollable result cards, explicit start/retry and readable unknown/warning labels. No performance score or FPS estimate is invented. The browser projects only the fixed action and catalog ID; paths and measurements remain native.
+
+### Download source diagnostics — 2026-11-04
+The same PreinstallDialog owns the explicit “Источники загрузки” action. It reuses its five scrollable cards, worker cancellation and unknown-state labels. Only anonymous HTTPS headers are probed; there is no automatic scan, throughput/FPS claim or VPN detection. HEAD refusal describes the requested endpoint, not every file on that provider. The source button occupies its own footer row on narrow screens. Transfer failures show a sanitized host, the failed file and a reason code; concurrent workers must not substitute the last successful worker's filename. Staging can run concurrently, but verification and existing transaction ownership still gate installation. No unqualified NeoForge mirror is introduced.
 
 ### Owner reference: pre-install diagnostic plate
 The preparation report now uses the supplied compact diagnostic reference: native shared chrome, NEXUS / DIAGNOSTICS masthead, a restrained cyan #35c8df diagnostic accent, numbered component rail and bordered result cards. Shared launcher buttons, semantic status colors and typography remain canonical. Vector state symbols accompany readable labels; secondary caveats remain visible. Busy progress is indeterminate because the collector emits a final report, not intermediate measurements. The completion badge counts processed entries, including unknowns, and is never a hardware-readiness percentage. Scroll belongs to the card list; footer actions remain reachable at narrow widths.

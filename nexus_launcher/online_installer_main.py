@@ -57,7 +57,8 @@ def main():
    row=QHBoxLayout();self.path=QLineEdit(str(Path(os.environ['LOCALAPPDATA'])/'Programs'/'NEXUS Launcher'));self.path.setAccessibleName('Папка установки');self.choose=QPushButton('Выбрать…');self.choose.clicked.connect(self.browse);row.addWidget(self.path);row.addWidget(self.choose);box.addLayout(row)
    note=QLabel('Старые сборки не переносятся автоматически. Место на диске будет проверено перед загрузкой. EXE пока без подписи Windows: Smart App Control может запретить запуск.');note.setWordWrap(True);note.setMinimumHeight(72);box.addWidget(note)
    self.status=QLabel('Готово к установке');self.status.setWordWrap(True);box.addWidget(self.status)
-   self.bar=QProgressBar();self.bar.setRange(0,100);self.bar.setValue(0);box.addWidget(self.bar)
+   self.percent=QLabel('0%');self.percent.setAccessibleName('Процент установки');box.addWidget(self.percent)
+   self.bar=QProgressBar();self.bar.setTextVisible(False);self.bar.setRange(0,100);self.bar.setValue(0);box.addWidget(self.bar)
    self.go=QPushButton('Скачать и установить');self.go.setObjectName('primaryAction');self.go.clicked.connect(self.start);box.addWidget(self.go)
    self.open=QPushButton('Открыть папку установки');self.open.setVisible(False);self.open.clicked.connect(lambda:os.startfile(str(self.target.parent)));box.addWidget(self.open)
    self.launch=QPushButton('Запустить NEXUS');self.launch.setVisible(False);self.launch.clicked.connect(self.run_launcher);box.addWidget(self.launch)
@@ -74,9 +75,10 @@ def main():
    phase,done,total=value
    self.status.setText({'CHECKING':'Проверяем выпуск…','DOWNLOADING':'Скачиваем полный лаунчер…','VERIFYING':'Проверяем и распаковываем файлы…','COMPLETE':'Лаунчер установлен.'}[phase])
    self.bar.setRange(0,100 if total else 0)
+   self.percent.setText(f'{min(99,done*100//total)}%' if total else 'Размер пока неизвестен')
    if total:self.bar.setValue(min(99,done*100//total))
   def result(self,result):
-   details,error=result;self.details=details;self.target=details.executable if details else None;self.status.setText(error or 'Установка завершена. Можно запускать NEXUS.');self.bar.setRange(0,100);self.bar.setValue(100 if details else 0)
+   details,error=result;self.details=details;self.target=details.executable if details else None;self.status.setText(error or 'Установка завершена. Можно запускать NEXUS.');self.bar.setRange(0,100);self.bar.setValue(100 if details else 0);self.percent.setText('100%' if details else 'Установка не завершена')
   def done_worker(self):
    self.worker.deleteLater();self.worker=None;self.title_bar.close_button.setEnabled(True)
    self.go.setVisible(self.target is None);self.go.setEnabled(True);self.choose.setEnabled(self.target is None);self.path.setEnabled(self.target is None)
