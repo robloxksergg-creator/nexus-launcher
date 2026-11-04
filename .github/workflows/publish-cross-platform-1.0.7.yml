@@ -1,0 +1,126 @@
+name: Publish coordinated 1.0.7 preview after native acceptance
+'on':
+  push:
+    branches: [release/publish-cross-platform-1.0.7]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: nexus-publish-cross-platform-1.0.7
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: robloxksergg-creator/nexus-launcher
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Verify all source runs and pinned artifact provenance
+        run: |
+          python - <<'PY'
+          import json,os,urllib.request
+          root='https://api.github.com/repos/'+os.environ['GH_REPO']
+          def get(path):
+            req=urllib.request.Request(root+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+            with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          rows=[(41878339271,13348671594,'04ce38ca4455ff2716d35ad8fee6fa2a0154c8887e3fd0552405922b03349b13'),(41878339118,13347114362,'e8f1e3280f1fb3b46397541ffca4ded183183dbcd948c29c03ef3c94119dcfd2'),(41878339169,13348307727,'63ad4abd92e0b4e893d7d3961b28345b05393aa856f31f81d4d50879dfd5c69a'),(41878339161,13346624887,'f89bdba8c07463f5438fc487c34d68583b2d8d1c97d36a97b79b4fb47953265a')]
+          for run_id,artifact_id,sha in rows:
+            run=get('/actions/runs/'+str(run_id));assert run['status']=='completed' and run['conclusion']=='success' and run['head_sha']=='59373a53f7675dcc5d1088b4f6e71769eac5fbd6'
+            a=get('/actions/artifacts/'+str(artifact_id));assert not a['expired'] and a['workflow_run']['id']==run_id and a['digest']=='sha256:'+sha
+          acceptance=get('/actions/runs/41890322345');assert acceptance['status']=='completed' and acceptance['conclusion']=='success' and acceptance['head_sha']=='ac959074999b261d46dfdf527d0f8029520c75a6'
+          a=get('/actions/artifacts/13354171356');assert not a['expired'] and a['workflow_run']['id']==41890322345 and a['digest']=='sha256:bd5339b9d1b66a2a8788bda5e9dab1e843b59967f371011212c67ebeceaaec64'
+          audit=get('/actions/runs/41837410650');assert audit['status']=='completed' and audit['conclusion']=='success' and audit['head_sha']=='3f5e6546fad61368cb421acbadb800e84e5813b6'
+          comparison=get('/compare/3f5e6546fad61368cb421acbadb800e84e5813b6...59373a53f7675dcc5d1088b4f6e71769eac5fbd6')
+          assert {f['filename'] for f in comparison['files']}=={'.github/workflows/candidate-1.0.7-windows.yml','.github/workflows/candidate-1.0.7-linux.yml','.github/workflows/candidate-1.0.7-macos.yml','.github/workflows/candidate-1.0.7-installer.yml'}
+          print('Full native audit, unchanged audited product source, three native builds and artifact identities confirmed')
+          PY
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          merge-multiple: true
+          artifact-ids: '13348671594'
+          run-id: 41878339271
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/inputs/windows
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          merge-multiple: true
+          artifact-ids: '13347114362'
+          run-id: 41878339118
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/inputs/linux
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          merge-multiple: true
+          artifact-ids: '13348307727'
+          run-id: 41878339169
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/inputs/macos
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          merge-multiple: true
+          artifact-ids: '13346624887'
+          run-id: 41878339161
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/inputs/installer
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          merge-multiple: true
+          artifact-ids: '13354171356'
+          run-id: 41890322345
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/inputs/acceptance
+      - name: Verify packages, offline signature and acceptance; prepare release
+        run: |
+          python -m pip install --disable-pip-version-check cryptography==50.0.1
+          python -B packaging/releases/1.0.7/prepare.py --input "$RUNNER_TEMP/inputs" --output "$RUNNER_TEMP/release" --approval packaging/releases/1.0.7/approval.json --notes packaging/releases/1.0.7/RELEASE-NOTES.md --acceptance "$RUNNER_TEMP/inputs/acceptance/windows-acceptance-for-publication.json"
+      - name: Publish all platform assets under one preview release
+        run: |
+          if gh release view v1.0.7-preview.1 >/dev/null 2>&1; then echo 'Release already exists; refusing to overwrite'; exit 1; fi
+          gh release create v1.0.7-preview.1 --target 59373a53f7675dcc5d1088b4f6e71769eac5fbd6 --title 'NEXUS Launcher 1.0.7 вЂ” Download Reliability Beta' --notes-file "$RUNNER_TEMP/release/RELEASE-NOTES.md" --draft --prerelease "$RUNNER_TEMP/release/"*
+          gh release edit v1.0.7-preview.1 --draft=false --prerelease --latest=false
+      - name: Verify public package links before switching signed update feed
+        run: |
+          for name in NEXUS-Setup.exe NEXUS-Managed-1.0.7-Windows-x64.zip NEXUS-1.0.7-Linux-x64.tar.gz NEXUS-1.0.7-macOS-arm64.zip portable-envelope.json; do
+            curl --fail --silent --show-error --head --location --max-time 60 "https://github.com/$GH_REPO/releases/download/v1.0.7-preview.1/$name" >/dev/null
+          done
+          python - <<'PY'
+          import json,os,pathlib,urllib.request,hashlib
+          url='https://api.github.com/repos/'+os.environ['GH_REPO']+'/releases/tags/v1.0.7-preview.1'
+          req=urllib.request.Request(url,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(req,timeout=30) as r: release=json.load(r)
+          assert not release['draft'] and release['prerelease']
+          assets={a['name']:a for a in release['assets']}
+          for p in (pathlib.Path(os.environ['RUNNER_TEMP'])/'release').iterdir():
+            if p.is_file():
+              with p.open('rb') as f: sha=hashlib.file_digest(f,'sha256').hexdigest()
+              assert assets[p.name]['size']==p.stat().st_size and assets[p.name]['digest']=='sha256:'+sha,p.name
+          print('Every public release asset digest and size matches the verified local input')
+          PY
+          mkdir "$RUNNER_TEMP/previous-feed"
+          gh release download updates-preview --pattern portable-envelope.json --dir "$RUNNER_TEMP/previous-feed"
+          python -B -c "import hashlib,pathlib,os; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'previous-feed/portable-envelope.json'; assert hashlib.sha256(p.read_bytes()).hexdigest()=='9fb597e6e711e04a9092e51285e8c4715e56f805d3e4d659b5e7320772fad2fc', 'Existing update feed changed; refusing replacement'"
+          gh release upload updates-preview "$RUNNER_TEMP/release/portable-envelope.json" --clobber
+      - name: Verify active update feed bytes after replacement
+        run: |
+          mkdir "$RUNNER_TEMP/published-feed"
+          gh release download updates-preview --pattern portable-envelope.json --dir "$RUNNER_TEMP/published-feed"
+          python -B -c "import pathlib,os; p=pathlib.Path(os.environ['RUNNER_TEMP']); assert (p/'published-feed/portable-envelope.json').read_bytes()==(p/'release/portable-envelope.json').read_bytes(), 'Published feed mismatch'; print('Published signed update feed matches verified 1.0.7 envelope')"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: nexus-1.0.7-publication-receipts
+          retention-days: 5
+          path: |
+            ${{ runner.temp }}/previous-feed/portable-envelope.json
+            ${{ runner.temp }}/release/SHA256SUMS.txt
+            ${{ runner.temp }}/release/windows-update-acceptance.json
+            ${{ runner.temp }}/release/windows-install-acceptance.json
+            ${{ runner.temp }}/published-feed/portable-envelope.json
