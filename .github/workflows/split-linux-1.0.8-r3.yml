@@ -1,0 +1,63 @@
+name: Split verified Linux 1.0.8 artifact without changing package bytes
+'on':
+  push:
+    branches: [release/split-linux-1.0.8-r3]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  split:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Verify native build and original artifact identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json,os,urllib.request
+          base='https://api.github.com/repos/robloxksergg-creator/nexus-launcher'
+          def get(p):
+            req=urllib.request.Request(base+p,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN']})
+            with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          run=get('/actions/runs/42031708772');assert run['conclusion']=='success' and run['head_sha']=='e2440128336b3cd9c60e190d2e010738c8de26a3'
+          a=get('/actions/artifacts/13416299166');assert not a['expired'] and a['digest']=='sha256:f52ba896a472fef4d4adde90377b9d50ad6aa08d8385253542da3b65d1378788'
+          PY
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '13416299166'
+          run-id: 42031708772
+          repository: robloxksergg-creator/nexus-launcher
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/linux
+      - name: Record unmodified inner package hashes
+        run: |
+          python - <<'PY'
+          import pathlib,hashlib,json,os
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'linux'
+          names=['NEXUS-1.0.8-Linux-x64.tar.gz','NEXUS-Update-1.0.8-Linux-x64.zip','posix-inventory-linux-x64.json','posix-update-receipts/native-posix-update-acceptance.json']
+          receipt={'original_artifact':13416299166,'source_commit':'e2440128336b3cd9c60e190d2e010738c8de26a3','files':{}}
+          for name in names:
+            with (p/name).open('rb') as f:sha=hashlib.file_digest(f,'sha256').hexdigest()
+            receipt['files'][name]={'sha256':sha,'size':(p/name).stat().st_size}
+          (p/'original-artifact-provenance.json').write_text(json.dumps(receipt,indent=2))
+          print(json.dumps(receipt))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nexus-linux-1.0.8-distribution
+          retention-days: 5
+          path: |
+            ${{ runner.temp }}/linux/NEXUS-1.0.8-Linux-x64.tar.gz
+            ${{ runner.temp }}/linux/SHA256SUMS-Linux.txt
+            ${{ runner.temp }}/linux/original-artifact-provenance.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nexus-linux-1.0.8-update
+          retention-days: 5
+          path: |
+            ${{ runner.temp }}/linux/NEXUS-Update-1.0.8-Linux-x64.zip
+            ${{ runner.temp }}/linux/posix-inventory-linux-x64.json
+            ${{ runner.temp }}/linux/original-artifact-provenance.json
+            ${{ runner.temp }}/linux/posix-update-receipts/native-posix-update-acceptance.json
