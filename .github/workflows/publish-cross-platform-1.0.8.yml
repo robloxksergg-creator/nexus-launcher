@@ -38,7 +38,7 @@ jobs:
           acceptance=get('/actions/runs/42033617550');assert acceptance['status']=='completed' and acceptance['conclusion']=='success' and acceptance['head_sha']=='dfa15a62e6c65f8501b16f753d8cd14ee33730e7'
           a=get('/actions/artifacts/13417248482');assert not a['expired'] and a['workflow_run']['id']==42033617550 and a['digest']=='sha256:030ff19bdbea4fc7126aea7f2c968ecd639bcf12bcb50e3e9cd13cf0da1e45c7'
           audit=get('/actions/runs/42035814049');assert audit['status']=='completed' and audit['conclusion']=='success' and audit['head_sha']=='cde2ea38154c274ca40b0aa20fbd40110acf3de4'
-          comparison=get('/compare/cde2ea38154c274ca40b0aa20fbd40110acf3de4...e2440128336b3cd9c60e190d2e010738c8de26a3')
+          comparison=get('/compare/e2440128336b3cd9c60e190d2e010738c8de26a3...cde2ea38154c274ca40b0aa20fbd40110acf3de4')
           assert {f['filename'] for f in comparison['files']}=={'.github/workflows/posix-autoupdate-audit.yml','tests/test_mod_catalog.py','tests/test_window_chrome.py'}
           print('Full native audit, unchanged audited product source, three native builds and artifact identities confirmed')
           PY
