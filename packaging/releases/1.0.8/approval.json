@@ -1,0 +1,115 @@
+{
+  "source_commit": "e2440128336b3cd9c60e190d2e010738c8de26a3",
+  "packages": {
+    "installer/NEXUS-Setup.exe": {
+      "size": 54187226,
+      "sha256": "32d14cf74d637c3bdb7524e6e5b3b46eb05e2bdabab2b30e2e79982faca8ac48"
+    },
+    "linux/NEXUS-1.0.8-Linux-x64.tar.gz": {
+      "size": 272450034,
+      "sha256": "28e698ebe3f5d07a7a59abfa0fca78591fb2f89f2edd6b92df1e941e43456caf"
+    },
+    "linux/NEXUS-Update-1.0.8-Linux-x64.zip": {
+      "size": 275850642,
+      "sha256": "d355b274deae24260ed9a81f2026ad2c0ff3ea4faaf661c090ac8610674d088f"
+    },
+    "linux/posix-inventory-linux-x64.json": {
+      "size": 1631064,
+      "sha256": "ea9de97c9ba2735ccb18dad33166901cc83b73d0ee2654de10cefdeb594e0a9b"
+    },
+    "macos/NEXUS-1.0.8-macOS-arm64.zip": {
+      "size": 212411423,
+      "sha256": "e37bf74a13d9c39105e1cf7a392db2bcd466282583bd17538e25fe79a0d5a5b7"
+    },
+    "macos/NEXUS-Update-1.0.8-macOS-arm64.zip": {
+      "size": 210993430,
+      "sha256": "4fd7db7bb0cc8cb6ac624cac8c0385f6cce2ba7769541c52e41e4ad536093b9e"
+    },
+    "macos/posix-inventory-macos-arm64.json": {
+      "size": 2076490,
+      "sha256": "9b92703d84cea60868246dd94f8903f191c5a0bb6b90fef4066c598156a09a38"
+    },
+    "windows/NEXUS-Managed-1.0.8-Windows-x64.zip": {
+      "size": 221575997,
+      "sha256": "bf6fbc5e19d3d57607d980b6e85c593ab1d6ff072b732ef9fd925af580878ea0"
+    },
+    "linux/posix-update-receipts/native-posix-update-acceptance.json": {
+      "size": 483,
+      "sha256": "c5265f8325cb18f35db2be8f3aa020d3a860924beb40e2c65758a4705ccc3d03"
+    },
+    "macos/posix-update-receipts/native-posix-update-acceptance.json": {
+      "size": 485,
+      "sha256": "13c3f52f411018dfd072e81523e31d44b45f8563feda4d4ce9b87f07fe1ee267"
+    },
+    "acceptance/windows-acceptance-for-publication.json": {
+      "size": 577,
+      "sha256": "db0790b93256165370a8762917a1b03993fd5d75f7a84a60e1b6957c19581bfe"
+    },
+    "acceptance/full-install-acceptance.json": {
+      "size": 294,
+      "sha256": "8796af4d4bef035e95a091147970d55e41601b4274ec19d6550e4da20f402e99"
+    }
+  },
+  "envelopes": {
+    "windows": {
+      "schema": 2,
+      "key_id": "nexus-public-preview-20261029",
+      "release": {
+        "format": "nexus-portable-zip-v1",
+        "version": "1.0.8",
+        "entrypoint": "NEXUS Managed Launcher.exe",
+        "channel": "stable",
+        "available": true,
+        "platform": "windows",
+        "arch": "x64",
+        "published_at": "2026-11-05T13:09:49.134172+00:00",
+        "expires_at": "2026-12-05T13:10:49.134172+00:00",
+        "url": "https://github.com/robloxksergg-creator/nexus-launcher/releases/download/v1.0.8-preview.1/NEXUS-Managed-1.0.8-Windows-x64.zip",
+        "size": 221575997,
+        "sha256": "bf6fbc5e19d3d57607d980b6e85c593ab1d6ff072b732ef9fd925af580878ea0"
+      },
+      "signature": "OR42Clyr4ge3Xu2IRSKwtnC7FFelQHcCPISR7pSe77llmZzBZeEbiSR140rwCRTI13pphnGQkTCcr9DVCxS+Aw==",
+      "canonical_sha256": "65398560665d2206f36e781b688303c31128a6d670f79c4e7f93ac8afc274d16"
+    },
+    "linux": {
+      "schema": 2,
+      "key_id": "nexus-public-preview-20261029",
+      "release": {
+        "format": "nexus-posix-zip-v1",
+        "platform": "linux",
+        "arch": "x64",
+        "version": "1.0.8",
+        "entrypoint": "NEXUS-Linux-x64/nexus-launcher",
+        "size": 275850642,
+        "sha256": "d355b274deae24260ed9a81f2026ad2c0ff3ea4faaf661c090ac8610674d088f",
+        "available": true,
+        "channel": "stable",
+        "url": "https://github.com/robloxksergg-creator/nexus-launcher/releases/download/v1.0.8-preview.1/NEXUS-Update-1.0.8-Linux-x64.zip",
+        "published_at": "2026-11-05T13:18:17.143778+00:00",
+        "expires_at": "2026-12-05T13:19:17.143778+00:00"
+      },
+      "signature": "2wlx6SaYAjQl3Snz5OcSVPAXVVAatsGcjN0a8hNhX4g8hzGiOHPXCMluiKWL84xH65xzaVYk+7uJrSrXlzLNAQ==",
+      "canonical_sha256": "f160685f8b6fa45d4ca685b6ef10f0304415472a1534285ef270a2a97a5e7997"
+    },
+    "macos": {
+      "schema": 2,
+      "key_id": "nexus-public-preview-20261029",
+      "release": {
+        "format": "nexus-posix-zip-v1",
+        "platform": "macos",
+        "arch": "arm64",
+        "version": "1.0.8",
+        "entrypoint": "NEXUS Launcher.app/Contents/MacOS/NEXUS Launcher",
+        "size": 210993430,
+        "sha256": "4fd7db7bb0cc8cb6ac624cac8c0385f6cce2ba7769541c52e41e4ad536093b9e",
+        "available": true,
+        "channel": "stable",
+        "url": "https://github.com/robloxksergg-creator/nexus-launcher/releases/download/v1.0.8-preview.1/NEXUS-Update-1.0.8-macOS-arm64.zip",
+        "published_at": "2026-11-05T13:26:06.840516+00:00",
+        "expires_at": "2026-12-05T13:27:06.840516+00:00"
+      },
+      "signature": "/o7FM6KHv8uAm+NqlVuE9Y8K3KyNzWKG8ksxS7WeMDEx2ae2iowwz1O/gpo8PqNezRfe3m74EGbVQPkSm7lVBg==",
+      "canonical_sha256": "5b6a5ca32319ea9c84829bd895943d951244662a076fa8c964d94c711b827bda"
+    }
+  }
+}
