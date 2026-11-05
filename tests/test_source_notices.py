@@ -60,3 +60,17 @@ def test_windows_case_collision_is_rejected(tmp_path):
     with pytest.raises(ValueError, match='collision'):
         collect(path, digest, tmp_path / 'output', 'src')
     assert not (tmp_path / 'output').exists()
+
+
+def test_deep_notice_paths_are_shortened_without_losing_bytes_or_provenance(tmp_path):
+    relative = 'node_modules/' * 14 + 'dependency/LICENSE'
+    content = b'Original upstream license\r\nCopyright fixture\n'
+    path, digest = archive(tmp_path, [('src/' + relative, content), ('src/LICENSE', b'root')])
+    output = tmp_path / 'output'
+    result = collect(path, digest, output, 'src')
+    entry = next(e for e in result['files'] if e.get('source_path') == relative)
+    assert len(entry['path']) <= 80
+    assert (output / entry['path']).read_bytes() == content
+    assert entry['sha256'] == hashlib.sha256(content).hexdigest()
+    verify = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'packaging/verify_notices.py'))['verify']
+    assert verify(output)['files_verified'] == 2

@@ -70,10 +70,20 @@ def collect(archive, expected_sha256, destination, prefix):
     destination.mkdir(parents=True, exist_ok=False)
     files = []
     for relative, content in chosen:
-        target = destination.joinpath(*relative.parts)
+        # Preserve upstream provenance in the inventory, without reproducing
+        # Chromium/node_modules nesting in a Windows installation path.
+        stored = relative
+        if len(relative.as_posix()) > 80:
+            stored = PurePosixPath('short', hashlib.sha256(relative.as_posix().encode('utf-8')).hexdigest() + '.txt')
+        target = destination.joinpath(*stored.parts)
+        if target.exists():
+            raise ValueError('Compacted notice path collision')
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(content)
-        files.append({'path': relative.as_posix(), 'sha256': hashlib.sha256(content).hexdigest()})
+        entry = {'path': stored.as_posix(), 'sha256': hashlib.sha256(content).hexdigest()}
+        if stored != relative:
+            entry['source_path'] = relative.as_posix()
+        files.append(entry)
     inventory = {'schema': 1, 'kind': 'notice-bundle', 'archive_sha256': expected_sha256,
                  'archive_prefix': prefix, 'scope': 'selected source notice filenames; all source platforms',
                  'license_clearance': 'NOT ESTABLISHED', 'files': files}

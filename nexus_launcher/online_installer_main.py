@@ -1,4 +1,4 @@
-"""One-file online installer and installed bootstrap entry point. No elevation."""
+"""Online installer; explicit UAC is restricted to preparing a new directory."""
 import os
 from pathlib import Path
 import sys
@@ -7,6 +7,11 @@ def main():
  if os.name!='nt' or not getattr(sys,'frozen',False):raise RuntimeError('Packaged Windows installer required')
  import nexus_launcher.build_channel as channel
  channel.PUBLIC_PREVIEW_BUILD=True
+ if '--nexus-prepare-directory' in sys.argv:
+  if len(sys.argv)!=4 or sys.argv[1]!='--nexus-prepare-directory':return 2
+  from nexus_launcher.installer_permissions import prepare_directory
+  try:prepare_directory(Path(sys.argv[2]),sys.argv[3]);return 0
+  except Exception:return 1
  from nexus_launcher.online_installation import install,installed_root,validate_destination,installation_details
  root=installed_root(Path(sys.executable))
  if root is not None:
@@ -14,7 +19,7 @@ def main():
   return launch(installation_root=root)
  from PySide6.QtCore import QThread,Signal,QTimer
  from PySide6.QtGui import QIcon
- from PySide6.QtWidgets import QApplication,QFileDialog,QLabel,QLineEdit,QPushButton,QProgressBar,QVBoxLayout,QHBoxLayout
+ from PySide6.QtWidgets import QApplication,QFileDialog,QLabel,QLineEdit,QPushButton,QProgressBar,QVBoxLayout,QHBoxLayout,QMessageBox
  from nexus_launcher.themed_dialog import NexusDialog
  from nexus_launcher.nexus_platform.presentation_style import stylesheet
  from nexus_launcher.nexus_platform.theme_tokens import TOKENS
@@ -39,6 +44,8 @@ def main():
      details=installation_details(target)
     self.finished_install.emit((details,None))
    except Exception as error:
+    if isinstance(error,PermissionError):
+     self.finished_install.emit((None,'INSTALL_PERMISSION_REQUIRED'));return
     category=transport_failure(error)['category']
     known={'INSTALL_DIRECTORY_NOT_EMPTY':'Выберите пустую папку. Существующие файлы не изменялись.','INSTALL_ALREADY_OWNED':'В папке находится другая установка. Выберите новую пустую папку.','INSTALL_PATH_TOO_LONG':'Выберите более короткий путь установки.','INSTALL_EXECUTABLE_CONFLICT':'В папке уже есть другой NEXUS.exe. Он не заменён.'}
     detail=known.get(str(error))
@@ -48,13 +55,14 @@ def main():
     self.finished_install.emit((None,detail))
  class Window(NexusDialog):
   def __init__(self):
-   super().__init__();self.worker=None;self.target=None;self.details=None;self.completion=None;self.shortcut_created=False
+   super().__init__();self.worker=None;self.target=None;self.details=None;self.completion=None;self.shortcut_created=False;self.needs_permissions=False;self.permission_request=None
    self.setWindowTitle('Установка NEXUS Launcher');self.setMinimumWidth(520);self.setStyleSheet(stylesheet()+f"QDialog {{ background:{TOKENS['background']}; }}")
    box=QVBoxLayout(self);box.setContentsMargins(28,24,28,24);box.setSpacing(16)
    title=QLabel('NEXUS Launcher');title.setStyleSheet('font-size:28px;font-weight:700');box.addWidget(title)
-   info=QLabel('Выберите папку. Установщик скачает полный лаунчер с GitHub, проверит подпись и файлы. Права администратора не требуются.');info.setWordWrap(True);box.addWidget(info)
+   info=QLabel('Выберите папку. По умолчанию — рядом с установщиком. Для защищённой папки предложим запрос Windows на её создание. Скачивание и запуск лаунчера выполняются без повышения прав.');info.setWordWrap(True);box.addWidget(info)
    box.addWidget(QLabel('Папка установки и данных сборок'))
-   row=QHBoxLayout();self.path=QLineEdit(str(Path(os.environ['LOCALAPPDATA'])/'Programs'/'NEXUS Launcher'));self.path.setAccessibleName('Папка установки');self.choose=QPushButton('Выбрать…');self.choose.clicked.connect(self.browse);row.addWidget(self.path);row.addWidget(self.choose);box.addLayout(row)
+   from nexus_launcher.installer_location import default_directory
+   row=QHBoxLayout();self.path=QLineEdit(str(default_directory()));self.path.setAccessibleName('Папка установки');self.choose=QPushButton('Выбрать…');self.choose.clicked.connect(self.browse);row.addWidget(self.path);row.addWidget(self.choose);box.addLayout(row)
    note=QLabel('Старые сборки не переносятся автоматически. Место на диске будет проверено перед загрузкой. EXE пока без подписи Windows: Smart App Control может запретить запуск.');note.setWordWrap(True);note.setMinimumHeight(72);box.addWidget(note)
    self.status=QLabel('Готово к установке');self.status.setWordWrap(True);box.addWidget(self.status)
    self.percent=QLabel('0%');self.percent.setAccessibleName('Процент установки');box.addWidget(self.percent)
@@ -66,9 +74,10 @@ def main():
    self.licenses=QPushButton('Лицензии компонентов');self.licenses.clicked.connect(lambda:os.startfile(str(Path(sys._MEIPASS)/'third-party-notices')));box.addWidget(self.licenses)
   def browse(self):
    value=QFileDialog.getExistingDirectory(self,'Выберите папку установки',self.path.text())
-   if value:self.path.setText(str(Path(value)/'NEXUS Launcher'))
+   if value:self.path.setText(str(Path(value)))
   def start(self):
-   if self.worker:return
+   if self.worker or self.permission_request:return
+   self.needs_permissions=False
    self.go.setEnabled(False);self.choose.setEnabled(False);self.path.setEnabled(False);self.title_bar.close_button.setEnabled(False)
    self.worker=Worker(Path(self.path.text()),self);self.worker.progress.connect(self.progress);self.worker.finished_install.connect(self.result);self.worker.finished.connect(self.done_worker);self.worker.start()
   def progress(self,value):
@@ -78,12 +87,35 @@ def main():
    self.percent.setText(f'{min(99,done*100//total)}%' if total else 'Размер пока неизвестен')
    if total:self.bar.setValue(min(99,done*100//total))
   def result(self,result):
-   details,error=result;self.details=details;self.target=details.executable if details else None;self.status.setText(error or 'Установка завершена. Можно запускать NEXUS.');self.bar.setRange(0,100);self.bar.setValue(100 if details else 0);self.percent.setText('100%' if details else 'Установка не завершена')
+   details,error=result;self.needs_permissions=error=='INSTALL_PERMISSION_REQUIRED';self.details=details;self.target=details.executable if details else None;self.status.setText('Нет прав записи в выбранную папку.' if self.needs_permissions else error or 'Установка завершена. Можно запускать NEXUS.');self.bar.setRange(0,100);self.bar.setValue(100 if details else 0);self.percent.setText('100%' if details else 'Установка не завершена')
   def done_worker(self):
    self.worker.deleteLater();self.worker=None;self.title_bar.close_button.setEnabled(True)
    self.go.setVisible(self.target is None);self.go.setEnabled(True);self.choose.setEnabled(self.target is None);self.path.setEnabled(self.target is None)
    self.open.setVisible(self.target is not None);self.launch.setVisible(self.target is not None)
    if self.target is not None:self.show_completion()
+   elif self.needs_permissions:QTimer.singleShot(0,self.ask_permissions)
+  def ask_permissions(self):
+   from nexus_launcher.installer_permissions import PermissionRequest,current_sid,validate_request
+   directory=Path(self.path.text())
+   try:validate_request(directory,current_sid())
+   except Exception:
+    self.status.setText('Для запроса Windows выберите новую папку внутри существующей. Права существующих папок не изменяются.');return
+   answer=QMessageBox.question(self,'Разрешить создание папки?',f'Создать папку {directory} и разрешить вашему пользователю запись в неё? Windows запросит подтверждение администратора. Лаунчер и игра не будут запускаться от администратора.',QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
+   if answer!=QMessageBox.Yes:return
+   try:self.permission_request=PermissionRequest(directory,int(self.winId()))
+   except OSError as error:
+    self.status.setText('Запрос Windows отменён. Можно выбрать другую папку.' if getattr(error,'winerror',None)==1223 else 'Не удалось запросить создание папки. Выберите доступную папку.');return
+   self.go.setEnabled(False);self.choose.setEnabled(False);self.path.setEnabled(False);self.title_bar.close_button.setEnabled(False)
+   self.status.setText('Ожидаем подтверждения Windows и создания папки…')
+   self.permission_timer=QTimer(self);self.permission_timer.timeout.connect(self.poll_permissions);self.permission_timer.start(250)
+  def poll_permissions(self):
+   try:code=self.permission_request.poll()
+   except OSError:
+    self.permission_timer.stop();self.status.setText('Не удалось подтвердить завершение запроса Windows. Закройте установщик после завершения системного запроса.');return
+   if code is None:return
+   self.permission_timer.stop();self.permission_request=None;self.title_bar.close_button.setEnabled(True);self.go.setEnabled(True);self.choose.setEnabled(True);self.path.setEnabled(True)
+   if code==0:self.start()
+   else:self.status.setText('Папка не подготовлена. Выберите другую новую папку; установка не продолжалась.')
   def show_completion(self):
    from nexus_launcher.installer_completion import CompletionWindow
    self.completion=CompletionWindow(self.details)
@@ -126,9 +158,9 @@ def main():
     self.accept()
    except Exception:self.status.setText('Не удалось запустить NEXUS. Откройте папку установки и повторите запуск.');self.launch.setEnabled(True)
   def reject(self):
-   if self.worker is None:super().reject()
+   if self.worker is None and self.permission_request is None:super().reject()
   def closeEvent(self,event):
-   if self.worker:event.ignore()
+   if self.worker or self.permission_request:event.ignore()
    else:super().closeEvent(event)
  app=QApplication(sys.argv);app.setApplicationName('NEXUS Setup');app.setWindowIcon(QIcon(str(Path(sys._MEIPASS)/'assets/icon.ico')))
  window=Window();window.show()
