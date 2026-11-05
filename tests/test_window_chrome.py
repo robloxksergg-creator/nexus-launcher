@@ -35,6 +35,23 @@ def activate(window):
     wait_until(window.isActiveWindow)
 
 
+def wait_for_restored_geometry(window, expected):
+    # Cocoa clears the Qt state before its queued native zoom finishes. A move
+    # during that animation tests a compositor race rather than user geometry.
+    deadline = time.monotonic() + 3
+    stable_since = None
+    while time.monotonic() < deadline:
+        if not window.isMaximized() and window.geometry() == expected:
+            stable_since = stable_since or time.monotonic()
+            if time.monotonic() - stable_since >= .3:
+                return
+        else:
+            stable_since = None
+        QTest.qWait(10)
+    assert not window.isMaximized() and window.geometry() == expected
+    pytest.fail('Restored geometry did not settle before the next user action')
+
+
 def test_restore_repeated_cycles_and_minimize():
     app = QApplication.instance() or QApplication([])
     window = QMainWindow()
@@ -138,7 +155,7 @@ def test_restore_keeps_user_geometry_and_button_double_click_does_not_bubble():
         title.maximize.click()
         wait_until(window.isMaximized)
         title.maximize.click()
-        wait_until(lambda: not window.isMaximized())
+        wait_for_restored_geometry(window, before)
         window.move(180, 130)
         moved = window.pos()
         QTest.qWait(150)

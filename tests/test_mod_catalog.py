@@ -99,9 +99,14 @@ def test_embedded_library_creates_persistent_pack(candidate):  # noqa: F811
                 dialog.loader.setCurrentText('Vanilla')
                 dialog.accept()
 
-        QTimer.singleShot(150, complete_dialog)
         button = next(button for button in page.library.findChildren(QPushButton)
                       if button.text() == 'Создать сборку')
+        # Cocoa may consume the first click solely to activate a native window.
+        # Test the button action after activation, not the window-manager race.
+        host.raise_()
+        host.activateWindow()
+        assert QTest.qWaitForWindowActive(host, 3000)
+        QTimer.singleShot(150, complete_dialog)
         QTest.mouseClick(button, Qt.LeftButton)
         app.processEvents()
         assert observed == [True]
