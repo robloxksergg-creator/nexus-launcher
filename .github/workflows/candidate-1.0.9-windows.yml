@@ -43,9 +43,11 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m pip install --no-index --no-deps (Get-ChildItem "$env:RUNNER_TEMP\wheels" -Filter '*.whl').FullName
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build native directory helper using existing Windows SDK
+        run: ./packaging/build_directory_helper.ps1
       - name: Test asset and package contracts
         run: |
-          python -B -m pytest tests/test_portable_assets.py tests/test_public_variant.py tests/test_public_update_identity.py tests/test_portable_transition.py tests/test_bootstrap_installation.py tests/test_github_updates.py tests/test_source_notices.py tests/test_notice_verification.py tests/test_online_installation.py tests/test_installer_location.py -q -p no:cacheprovider
+          python -B -m pytest tests/test_portable_assets.py tests/test_public_variant.py tests/test_public_update_identity.py tests/test_portable_transition.py tests/test_bootstrap_installation.py tests/test_github_updates.py tests/test_source_notices.py tests/test_notice_verification.py tests/test_online_installation.py tests/test_installer_location.py tests/test_installer_uac_request.py -q -p no:cacheprovider
           exit $LASTEXITCODE
       - name: Diagnostics and second-factor regression checks without live accounts
         run: |

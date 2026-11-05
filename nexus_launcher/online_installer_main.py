@@ -7,11 +7,6 @@ def main():
  if os.name!='nt' or not getattr(sys,'frozen',False):raise RuntimeError('Packaged Windows installer required')
  import nexus_launcher.build_channel as channel
  channel.PUBLIC_PREVIEW_BUILD=True
- if '--nexus-prepare-directory' in sys.argv:
-  if len(sys.argv)!=4 or sys.argv[1]!='--nexus-prepare-directory':return 2
-  from nexus_launcher.installer_permissions import prepare_directory
-  try:prepare_directory(Path(sys.argv[2]),sys.argv[3]);return 0
-  except Exception:return 1
  from nexus_launcher.online_installation import install,installed_root,validate_destination,installation_details
  root=installed_root(Path(sys.executable))
  if root is not None:

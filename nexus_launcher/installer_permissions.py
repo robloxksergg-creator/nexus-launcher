@@ -7,7 +7,7 @@ import re
 import subprocess
 import sys
 
-from nexus_launcher.safe_paths import checked_path, pinned_directory
+from nexus_launcher.safe_paths import checked_path
 
 
 def validate_request(directory, sid):
@@ -56,31 +56,6 @@ def current_sid():
         kernel.CloseHandle(token)
 
 
-def prepare_directory(directory, sid):
-    """Elevated helper: exclusive mkdir and Modify permission for original user.
-
-    Existing directories, broad SIDs, reparse points and volume roots are refused.
-    No package, installer, shortcut or game is downloaded, copied or executed.
-    """
-    if os.name != 'nt':
-        raise OSError('Windows required')
-    directory = validate_request(directory, sid)
-    system = ctypes.create_unicode_buffer(32768)
-    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
-    kernel.GetSystemDirectoryW.argtypes = [w.LPWSTR, w.UINT]
-    count = kernel.GetSystemDirectoryW(system, len(system))
-    if not 0 < count < len(system):
-        raise ctypes.WinError(ctypes.get_last_error())
-    tool = Path(system.value) / 'icacls.exe'
-    with pinned_directory(directory.parent):
-        # mkdir is exclusive: no pre-existing folder can have its ACL changed.
-        directory.mkdir()
-        with pinned_directory(directory):
-            subprocess.run([str(tool), str(directory), '/grant:r', '*' + sid + ':(OI)(CI)M', '/Q'],
-                           check=True, timeout=30, capture_output=True, shell=False,
-                           creationflags=subprocess.CREATE_NO_WINDOW)
-
-
 class PermissionRequest:
     def __init__(self, directory, owner):
         if os.name != 'nt' or not getattr(sys, 'frozen', False):
@@ -98,8 +73,11 @@ class PermissionRequest:
         info.fMask = 0x40 | 0x100  # keep owned process handle; no async shell work
         info.hwnd = owner
         info.lpVerb = 'runas'
-        info.lpFile = sys.executable
-        info.lpParameters = subprocess.list2cmdline(['--nexus-prepare-directory', str(directory), sid])
+        helper = checked_path(Path(sys._MEIPASS), 'installer-tools/NEXUS-Directory-Helper.exe')
+        if not helper.is_file():
+            raise OSError('Native directory helper missing')
+        info.lpFile = str(helper)
+        info.lpParameters = subprocess.list2cmdline([str(directory), sid])
         info.lpDirectory = str(Path(sys.executable).parent)
         info.nShow = 0
         shell = ctypes.WinDLL('shell32', use_last_error=True)

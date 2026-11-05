@@ -33,13 +33,14 @@ def test_existing_directories_volume_roots_and_missing_parents_are_refused(tmp_p
     assert validate_request(tmp_path / 'new', SID) == tmp_path / 'new'
 
 
-@pytest.mark.skipif(os.name != 'nt', reason='Real Windows token and directory ACL required')
+@pytest.mark.skipif(os.name != 'nt' or not os.environ.get('NEXUS_PERMISSION_HELPER'), reason='Built native Windows directory helper required')
 def test_native_prepare_only_new_owned_directory(tmp_path):
-    from nexus_launcher.installer_permissions import current_sid, prepare_directory
+    from nexus_launcher.installer_permissions import current_sid
+    import subprocess
     sid = current_sid()
     directory = tmp_path / 'new-NEXUS'
-    prepare_directory(directory, sid)
+    subprocess.run([os.environ['NEXUS_PERMISSION_HELPER'], str(directory), sid], check=True, timeout=30)
     (directory / 'write-probe').write_bytes(b'OWNED TEST FILE')
-    with pytest.raises(ValueError):
-        prepare_directory(directory, sid)
+    with pytest.raises(subprocess.CalledProcessError):
+        subprocess.run([os.environ['NEXUS_PERMISSION_HELPER'], str(directory), sid], check=True, timeout=30)
     assert (directory / 'write-probe').read_bytes() == b'OWNED TEST FILE'
