@@ -15,7 +15,7 @@ import tempfile
 import zipfile
 
 from nexus_launcher.safe_paths import checked_path, pinned_directory, relative_parts
-from nexus_launcher.signed_release import verify_envelope
+from nexus_launcher.signed_release import verify_envelope, verify_signature
 
 FORMAT = 'nexus-posix-zip-v1'
 TARGETS = {
@@ -230,13 +230,18 @@ def stage_archive(source, envelope, staging_root, *, keys=None):
         return slot
 
 
-def stage_directory(source_parent, envelope, staging_root, *, keys=None, cancelled=lambda: False):
-    """Adopt only bytes matching a fresh signed inventory; never move the source."""
+def stage_directory(source_parent, envelope, staging_root, *, keys=None, cancelled=lambda: False,
+                    installed=False):
+    """Copy authenticated bytes; installed=True is only for the running baseline.
+
+    Publication expiry still blocks every new archive installation. It does not
+    invalidate the exact already installed version being adopted without upgrade.
+    """
     from nexus_launcher.resource_limits import ensure_space
     from nexus_launcher.user_instances import atomic_json
     if os.name != 'posix':
         raise OSError('POSIX staging requires a POSIX host')
-    inv = inventory(verify_envelope(envelope, keys=keys))
+    inv = inventory((verify_signature if installed else verify_envelope)(envelope, keys=keys))
     source_parent, staging_root = Path(source_parent).absolute(), Path(staging_root).absolute()
     verify_tree(source_parent, inv)
     with pinned_directory(staging_root, create=True):

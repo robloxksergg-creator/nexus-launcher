@@ -17,7 +17,7 @@ from nexus_launcher.portable_transition import _read
 from nexus_launcher.posix_bootstrap_process import PIPE_ENV, PosixChildSession, PosixLaunchLease, PosixProcessAdapter
 from nexus_launcher.posix_package import FORMAT, inventory, stage_directory
 from nexus_launcher.safe_paths import checked_path, pinned_directory
-from nexus_launcher.signed_release import canonical, verify_envelope
+from nexus_launcher.signed_release import canonical, verify_signature
 from nexus_launcher.startup_portable_backend import PortableStartupBackend
 from nexus_launcher.update_state import update_lock
 from nexus_launcher.user_instances import atomic_json
@@ -41,7 +41,9 @@ def provision_directory(root, source_parent, envelope, *, platform, arch, versio
     with pinned_directory(root, create=True), update_lock(root):
         if checked_path(root, 'active.json').exists():
             return False
-        payload = verify_envelope(envelope, keys=keys)
+        # Adoption is not an upgrade: require the exact executing build version
+        # and every signed source byte. Installed identity survives expiry.
+        payload = verify_signature(envelope, keys=keys)
         if (payload.get('available') is not True or payload.get('format') != FORMAT
                 or payload.get('platform') != platform or payload.get('arch') != arch
                 or payload.get('version') != version):
@@ -59,14 +61,14 @@ def provision_directory(root, source_parent, envelope, *, platform, arch, versio
             if not isinstance(name, str) or '/' in name or not name.startswith('portable-stage-'):
                 raise ValueError('Invalid initial slot')
             slot = checked_path(root, 'slots/' + name)
-            verify_staged_portable(slot, keys=keys)
+            verify_staged_portable(slot, keys=keys, installed=True)
             if hashlib.sha256(canonical(_read(slot, 'envelope.json')['release'])).hexdigest() != digest:
                 raise ValueError('Initial recovery identity mismatch')
         else:
             if checked_path(root, 'highest-package.json').exists():
                 raise ValueError('Do not recreate lost installed history')
             slot = stage_directory(source_parent, envelope, checked_path(root, 'slots'),
-                                   keys=keys, cancelled=cancelled)
+                                   keys=keys, cancelled=cancelled, installed=True)
             if cancelled():
                 raise InterruptedError('Initial provisioning cancelled')
             atomic_json(receipt, {'schema': 1, 'phase': 'PREPARED', 'slot': slot.name, 'identity': digest})
@@ -98,7 +100,7 @@ def main(data_root, *, platform, arch, executable):
         def prepare():
             try:
                 initial = GitHubPackageTransport(feed(platform, arch, version=identity.VERSION)).manifest()
-                inv = inventory(verify_envelope(initial))
+                inv = inventory(verify_signature(initial))
                 source_parent = Path(executable).absolute()
                 for _ in Path(inv.entrypoint).parts:
                     source_parent = source_parent.parent

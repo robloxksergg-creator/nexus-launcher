@@ -1,7 +1,7 @@
 name: POSIX auto-update contracts and native IPC audit
 'on':
   push:
-    branches: [audit/posix-autoupdate-20261105]
+    branches: [audit/posix-autoupdate-20261105, release/verify-cross-platform-1.0.8]
 permissions:
   contents: read
 jobs:

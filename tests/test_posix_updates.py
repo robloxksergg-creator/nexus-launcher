@@ -170,6 +170,17 @@ def test_native_stage_copy_initial_provision_and_tamper(bundle, tmp_path):
     assert not provision_directory(root, slot / 'files', sign(p), platform='linux', arch='x64',
                                    version='1.2.3', keys=keys)
     assert sentinel.read_bytes() == b'player data'
+    # Expiry does not erase the identity of this already installed/running
+    # build, but it must still refuse a newly downloaded archive.
+    expired = copy.deepcopy(p)
+    expired['expires_at'] = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
+    assert provision_directory(tmp_path / 'adopt-installed', slot / 'files', sign(expired),
+                               platform='linux', arch='x64', version='1.2.3', keys=keys)
+    with pytest.raises(ValueError):
+        stage_archive(source, sign(expired), tmp_path / 'expired-new-install', keys=keys)
+    with pytest.raises(ValueError, match='mismatch'):
+        provision_directory(tmp_path / 'wrong-running-version', slot / 'files', sign(expired),
+                            platform='linux', arch='x64', version='1.2.4', keys=keys)
     (slot / 'files' / p['entrypoint']).chmod(0o644)
     with pytest.raises(ValueError, match='mode'):
         verify_tree(slot / 'files', inv)
