@@ -9,8 +9,15 @@ if (Test-Path -LiteralPath $output) { throw 'Fresh helper output required' }
 New-Item -ItemType Directory -Path $output | Out-Null
 $executable = Join-Path $output 'NEXUS-Directory-Helper.exe'
 $object = Join-Path $output 'prepare-directory.obj'
-$command = '""{0}" -arch=x64 -host_arch=x64 && cl /nologo /std:c++17 /MT /O2 /W4 /WX /EHsc /DUNICODE /D_UNICODE "{1}" /Fo"{2}" /link /SUBSYSTEM:WINDOWS /OUT:"{3}" advapi32.lib shell32.lib ntdll.lib"' -f $developer,$source,$object,$executable
-& $env:ComSpec /d /s /c $command
+$batch = Join-Path $output 'build-helper.cmd'
+$commands = @(
+    ('@call "{0}" -arch=x64 -host_arch=x64' -f $developer),
+    '@if errorlevel 1 exit /b %errorlevel%',
+    ('@cl /nologo /std:c++17 /MT /O2 /W4 /WX /EHsc /DUNICODE /D_UNICODE "{0}" /Fo"{1}" /link /SUBSYSTEM:WINDOWS /OUT:"{2}" advapi32.lib shell32.lib ntdll.lib' -f $source,$object,$executable),
+    '@exit /b %errorlevel%'
+)
+Set-Content -LiteralPath $batch -Value $commands -Encoding ascii
+& $env:ComSpec /d /c $batch
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if (-not (Test-Path -LiteralPath $executable)) { throw 'Native helper not produced' }
 "NEXUS_PERMISSION_HELPER=$executable" >> $env:GITHUB_ENV

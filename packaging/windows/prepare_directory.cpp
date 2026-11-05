@@ -63,7 +63,7 @@ static int prepare(const std::wstring& path, const std::wstring& sid_text) {
         if (h == INVALID_HANDLE_VALUE) return 3;
         pins.push_back(h);
         FILE_ATTRIBUTE_TAG_INFO info{};
-        if (!GetFileInformationByHandleEx(h, FileAttributeTagInfo, &info, sizeof(info)) ||
+        if (!GetFileInformationByHandleEx(h, FileAttributeTagInfo, &info, static_cast<DWORD>(sizeof(info))) ||
             !(info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) || (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) return 3;
         if (i + 1 < parts.size()) {
             if (current.back() != L'\\') current += L'\\';
@@ -76,7 +76,7 @@ static int prepare(const std::wstring& path, const std::wstring& sid_text) {
     name.Length = static_cast<USHORT>(leaf.size() * sizeof(wchar_t));
     name.MaximumLength = name.Length;
     OBJECT_ATTRIBUTES attributes{};
-    attributes.Length = sizeof(attributes);
+    attributes.Length = static_cast<ULONG>(sizeof(attributes));
     attributes.RootDirectory = pins.back();
     attributes.ObjectName = &name;
     attributes.Attributes = OBJ_CASE_INSENSITIVE;
