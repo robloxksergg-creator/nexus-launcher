@@ -133,6 +133,8 @@ class PosixProcessAdapter:
                                         env=child_environment())
                 if args[0].endswith('lipo') and result.stdout.strip() != b'arm64':
                     raise ValueError('Wrong macOS architecture')
+            from nexus_launcher.posix_quarantine import assess
+            assess(bundle, child_environment())
         elif sys.platform.startswith('linux'):
             with executable.open('rb') as stream:
                 header = stream.read(20)

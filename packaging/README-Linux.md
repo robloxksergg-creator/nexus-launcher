@@ -24,9 +24,21 @@ or removed. Account sessions require an unlocked Secret Service/KWallet backend
 in your desktop session. If it is unavailable, sign-in must fail rather than
 store the session token in a plaintext fallback.
 
-This first Linux build has no automatic binary replacement. The Windows
-bootstrap and Windows update feed are not used. Updates will require a complete
-Linux package until a Linux-specific verified updater is implemented.
+Starting with 1.0.8, a dedicated signed Linux update channel is supported.
+Users of 1.0.7 and older must install the complete 1.0.8 package once. After
+the first responsive launch, NEXUS prepares a private managed copy only if the
+installed files match their signed release inventory. Initial preparation needs
+network access; failure leaves the original launcher usable and is retried on
+the next launch. Preparation does not execute a second launcher concurrently.
+
+Subsequent launches check the Linux feed, verify the complete inactive bundle,
+and switch only after the new process acknowledges real UI readiness through
+private inherited pipes. The previous signed slot is retained. An uncertain
+process or transition blocks further activation rather than forcing a retry.
+Update files live under `.launcher-updates` in the data directory; they are
+separate from worlds and instances. Do not delete update state while running.
+The Windows feed is never used. Root access and security-policy changes are
+neither required nor requested.
 
 GPL-3.0-only. Copyright 2026 Икрам Ikram / ForceCore. See LICENSE, COPYRIGHT.md
 and the packaged third-party-notices. This is a development review package,

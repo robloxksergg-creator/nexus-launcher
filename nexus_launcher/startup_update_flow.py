@@ -37,6 +37,10 @@ class LaunchUncertain(UpdateFailure):
     pass
 
 
+class OSApprovalRequired(UpdateFailure):
+    """The OS did not authorize this staged application; never bypass its policy."""
+
+
 class StartupFlow:
     """Single worker owner. UI must serialize calls and render returned Views.
 
@@ -125,7 +129,10 @@ class StartupFlow:
                 detail = "Повторите проверку или запустите установленную версию, если она доступна."
                 if self.view.phase == Phase.VERIFYING:
                     # Public categories only, never backend paths or exception text.
-                    if isinstance(error, OSError):
+                    if isinstance(error, OSApprovalRequired):
+                        detail = ("macOS не разрешила запуск обновления. Подтвердите приложение штатными "
+                                  "средствами macOS. Код: OS_APPROVAL_REQUIRED.")
+                    elif isinstance(error, OSError):
                         detail = "Не удалось прочитать или записать файлы обновления. Код: VERIFY_IO."
                     elif isinstance(error, ValueError):
                         detail = "Пакет не прошёл проверку. Код: VERIFY_REJECTED."

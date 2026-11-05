@@ -225,6 +225,8 @@ def stage_archive(source, envelope, staging_root, *, keys=None):
                 with pinned_directory(p.parent, create=True):
                     os.symlink(value, p)
         verify_tree(files, inv)
+        from nexus_launcher.posix_quarantine import preserve
+        preserve(source, files / inv.bundle)
         atomic_json(slot / 'envelope.json', envelope)
         atomic_json(slot / 'journal.json', {'schema': 1, 'phase': 'READY'})
         return slot
@@ -275,6 +277,8 @@ def stage_directory(source_parent, envelope, staging_root, *, keys=None, cancell
             with pinned_directory(p.parent, create=True):
                 os.symlink(value, p)
         verify_tree(files, inv)
+        from nexus_launcher.posix_quarantine import preserve
+        preserve(source_parent / inv.bundle, files / inv.bundle)
         atomic_json(slot / 'envelope.json', envelope)
         atomic_json(slot / 'journal.json', {'schema': 1, 'phase': 'READY'})
         return slot

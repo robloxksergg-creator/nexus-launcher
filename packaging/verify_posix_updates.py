@@ -30,8 +30,7 @@ def verify(initial, update, initial_inventory, update_inventory, root, output, p
     from nexus_launcher.posix_package import verify_tree
     from nexus_launcher.portable_package import verify_staged_portable
     from nexus_launcher.signed_release import METADATA, canonical
-    from nexus_launcher.startup_portable_backend import PortableStartupBackend
-    from nexus_launcher.posix_update_main import provision_directory
+    from nexus_launcher.posix_update_main import provision_directory, PosixStartupBackend
     key = Ed25519PrivateKey.generate()
     keys = {'native-fixture': key.public_key().public_bytes_raw().hex()}
     now = datetime.now(UTC)
@@ -87,8 +86,8 @@ def verify(initial, update, initial_inventory, update_inventory, root, output, p
     versions = []
     with PosixLaunchLease(managed) as lease:
         adapter = Adapter(lease)
-        backend = PortableStartupBackend(managed, transport=transport, adapter=adapter,
-                                         platform=platform, arch=arch, keys=keys)
+        backend = PosixStartupBackend(managed, transport=transport, adapter=adapter,
+                                      platform=platform, arch=arch, keys=keys)
         try:
             provision_initial(managed, initial, first, platform=platform, arch=arch, keys=keys)
             pointer = (managed / 'active.json').read_bytes()

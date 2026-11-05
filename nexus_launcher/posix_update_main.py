@@ -23,6 +23,30 @@ from nexus_launcher.update_state import update_lock
 from nexus_launcher.user_instances import atomic_json
 
 
+class PosixPackageTransport(GitHubPackageTransport):
+    def download(self, payload, cache, progress):
+        archive = super().download(payload, cache, progress)
+        from nexus_launcher.posix_quarantine import mark_download
+        mark_download(archive)
+        return archive
+
+
+class PosixStartupBackend(PortableStartupBackend):
+    def check(self):
+        root = self.root
+        if not checked_path(root, 'active.json').exists() and checked_path(root, 'initial-provision.json').exists():
+            initial = GitHubPackageTransport(feed(self.platform, self.arch, version=identity.VERSION)).manifest()
+            provision_directory(root, root, initial, platform=self.platform, arch=self.arch, version=identity.VERSION)
+        return super().check()
+
+    def stage(self, archive, release):
+        slot = super().stage(archive, release)
+        # Reject OS trust/architecture before PREPARED or any possible spawn.
+        inv = inventory(verify_signature(release, keys=self.keys))
+        self.adapter._validate(slot / 'files' / inv.entrypoint, slot / 'files')
+        return slot
+
+
 def feed(platform, arch, *, version=None):
     if (platform, arch) not in {('linux', 'x64'), ('macos', 'arm64')}:
         raise ValueError('Unsupported POSIX update platform')
@@ -130,16 +154,8 @@ def managed_window(root, lease, *, platform, arch):
     from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication
     from nexus_launcher.startup_update_window import StartupUpdateWindow
-    class Backend(PortableStartupBackend):
-        def check(self):
-            if not checked_path(root, 'active.json').exists() and checked_path(root, 'initial-provision.json').exists():
-                initial = GitHubPackageTransport(feed(platform, arch, version=identity.VERSION)).manifest()
-                # PREPARED recovery uses the exact already staged signed slot;
-                # source_parent is deliberately unused in that recovery branch.
-                provision_directory(root, root, initial, platform=platform, arch=arch, version=identity.VERSION)
-            return super().check()
-    backend = Backend(root, transport=GitHubPackageTransport(feed(platform, arch)),
-                      adapter=PosixProcessAdapter(lease), platform=platform, arch=arch)
+    backend = PosixStartupBackend(root, transport=PosixPackageTransport(feed(platform, arch)),
+                                 adapter=PosixProcessAdapter(lease), platform=platform, arch=arch)
     app = QApplication([])
     app.setApplicationName('NEXUS Launcher')
     resources = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[1]))
