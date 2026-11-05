@@ -53,22 +53,36 @@ static int prepare(const std::wstring& path, const std::wstring& sid_text) {
         *GetSidSubAuthority(sid, 0) != 21) return 2;
     std::vector<HANDLE> pins;
     struct PinsClose { std::vector<HANDLE>& v; ~PinsClose() { for (auto h : v) CloseHandle(h); } } close{pins};
-    std::wstring current = path.substr(0, 3);
-    for (size_t i = 0; i < parts.size(); ++i) {
-        // Parent components are opened without following reparse points and
-        // without DELETE sharing. Hold every handle until the ACL is complete.
-        auto h = CreateFileW((L"\\\\?\\" + current).c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
-            FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
-            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-        if (h == INVALID_HANDLE_VALUE) return 3;
+    auto root = CreateFileW((L"\\\\?\\" + path.substr(0, 3)).c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (root == INVALID_HANDLE_VALUE) return 3;
+    pins.push_back(root);
+    FILE_ATTRIBUTE_TAG_INFO root_info{};
+    if (!GetFileInformationByHandleEx(root, FileAttributeTagInfo, &root_info, static_cast<DWORD>(sizeof(root_info))) ||
+        !(root_info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) || (root_info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) return 3;
+    // Walk one validated component at a time relative to the pinned parent.
+    // Absolute DOS paths are never re-resolved after the volume root is held.
+    for (size_t i = 0; i + 1 < parts.size(); ++i) {
+        UNICODE_STRING part_name{};
+        part_name.Buffer = const_cast<PWSTR>(parts[i].c_str());
+        part_name.Length = static_cast<USHORT>(parts[i].size() * sizeof(wchar_t));
+        part_name.MaximumLength = part_name.Length;
+        OBJECT_ATTRIBUTES parent_attributes{};
+        parent_attributes.Length = static_cast<ULONG>(sizeof(parent_attributes));
+        parent_attributes.RootDirectory = pins.back();
+        parent_attributes.ObjectName = &part_name;
+        parent_attributes.Attributes = OBJ_CASE_INSENSITIVE;
+        IO_STATUS_BLOCK parent_io{};
+        HANDLE h = INVALID_HANDLE_VALUE;
+        const NTSTATUS opened = NtCreateFile(&h, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            &parent_attributes, &parent_io, nullptr, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE,
+            1 /* FILE_OPEN */, 1 | 0x20 | 0x00200000, nullptr, 0);
+        if (opened < 0) return 3;
         pins.push_back(h);
         FILE_ATTRIBUTE_TAG_INFO info{};
         if (!GetFileInformationByHandleEx(h, FileAttributeTagInfo, &info, static_cast<DWORD>(sizeof(info))) ||
             !(info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) || (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) return 3;
-        if (i + 1 < parts.size()) {
-            if (current.back() != L'\\') current += L'\\';
-            current += parts[i];
-        }
     }
     auto& leaf = parts.back();
     UNICODE_STRING name{};

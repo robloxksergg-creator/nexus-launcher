@@ -44,3 +44,33 @@ def test_native_prepare_only_new_owned_directory(tmp_path):
     with pytest.raises(subprocess.CalledProcessError):
         subprocess.run([os.environ['NEXUS_PERMISSION_HELPER'], str(directory), sid], check=True, timeout=30)
     assert (directory / 'write-probe').read_bytes() == b'OWNED TEST FILE'
+
+
+@pytest.mark.skipif(os.name != 'nt' or not os.environ.get('NEXUS_PERMISSION_HELPER'), reason='Built native Windows directory helper required')
+def test_native_helper_rejects_broad_sids_roots_and_relative_paths(tmp_path):
+    import subprocess
+    from nexus_launcher.installer_permissions import current_sid
+    tool = os.environ['NEXUS_PERMISSION_HELPER']
+    for directory, sid in [(str(tmp_path / 'new'), 'S-1-1-0'),
+                           (tmp_path.anchor, current_sid()), ('relative', current_sid())]:
+        result = subprocess.run([tool, directory, sid], timeout=30)
+        assert result.returncode != 0
+    assert not (tmp_path / 'new').exists()
+
+
+@pytest.mark.skipif(os.name != 'nt' or not os.environ.get('NEXUS_PERMISSION_HELPER'), reason='Built native Windows directory helper required')
+def test_native_helper_unicode_parent_and_no_reparse_traversal(tmp_path):
+    import subprocess
+    from nexus_launcher.installer_permissions import current_sid
+    tool, sid = os.environ['NEXUS_PERMISSION_HELPER'], current_sid()
+    parent = tmp_path / 'Папка пользователя'
+    parent.mkdir()
+    subprocess.run([tool, str(parent / 'NEXUS Launcher'), sid], check=True, timeout=30)
+    link = tmp_path / 'link'
+    try:
+        link.symlink_to(parent, target_is_directory=True)
+    except OSError:
+        pytest.skip('Native symlink creation privilege unavailable; Unicode creation already passed')
+    result = subprocess.run([tool, str(link / 'must-not-exist'), sid], timeout=30)
+    assert result.returncode != 0
+    assert not (parent / 'must-not-exist').exists()
