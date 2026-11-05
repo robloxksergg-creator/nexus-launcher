@@ -43,6 +43,9 @@ def verify_installed_inventory(envelope, *, keys=None):
 
 
 def _inventory_from_payload(payload):
+    if payload.get('format') == 'nexus-posix-zip-v1':
+        from nexus_launcher.posix_package import inventory
+        return inventory(payload)
     if payload.get("format") != "nexus-portable-zip-v1":
         raise ValueError("Unsupported portable package format")
     version = payload.get("version")
@@ -90,6 +93,9 @@ def verify_portable_archive(source, envelope, *, keys=None):
     separate gates. A successful integrity check is not installation authority.
     """
     inventory = verify_portable_inventory(envelope, keys=keys)
+    if envelope['release'].get('format') == 'nexus-posix-zip-v1':
+        from nexus_launcher.posix_package import verify_archive
+        return verify_archive(source, envelope, keys=keys)
     expected = {name: (size, digest) for name, size, digest in inventory.files}
     with zipfile.ZipFile(source) as archive:
         members = archive.infolist()
@@ -128,6 +134,9 @@ def stage_portable_archive(source: Path, envelope, staging_root: Path, *, keys=N
     not activation authority; consumers must revalidate files before activation.
     Failed partial slots are retained without READY, not recursively cleaned up.
     """
+    if envelope.get('release', {}).get('format') == 'nexus-posix-zip-v1':
+        from nexus_launcher.posix_package import stage_archive
+        return stage_archive(source, envelope, staging_root, keys=keys)
     from nexus_launcher.resource_limits import copy_limited, ensure_space
     from nexus_launcher.user_instances import atomic_json
 
@@ -162,6 +171,9 @@ def stage_portable_archive(source: Path, envelope, staging_root: Path, *, keys=N
 
 
 def _verify_staged_files(root, inventory):
+    from nexus_launcher.posix_package import PosixInventory, verify_tree
+    if isinstance(inventory, PosixInventory):
+        return verify_tree(root, inventory)
     expected = {name for name, _, _ in inventory.files}
     observed = set()
     for parent, dirs, names in os.walk(root, followlinks=False):

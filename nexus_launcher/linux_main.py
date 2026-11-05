@@ -24,9 +24,15 @@ def configure_environment():
 
 
 def main():
-    configure_environment()
+    root = configure_environment()
     import nexus_launcher.build_channel as channel
     channel.PUBLIC_PREVIEW_BUILD = True
+    if getattr(sys, 'frozen', False) and '--self-test-report' not in sys.argv:
+        from nexus_launcher.posix_update_main import main as bootstrap
+        return bootstrap(root, platform='linux', arch='x64', executable=sys.executable)
+    if 'NEXUS_POSIX_BOOTSTRAP_FDS' in os.environ:
+        from nexus_launcher.posix_update_main import main as bootstrap
+        return bootstrap(root, platform='linux', arch='x64', executable=sys.executable)
     from nexus_launcher.preview_prototype import main as run
     return run()
 

@@ -62,7 +62,9 @@ def prepare_transition(root: Path, candidate: str, expected_active: str, *, plat
         history = checked_path(root, "highest-package.json")
         if history.exists():
             highest = verify_signature(_read(root, "highest-package.json"), keys=keys)
-            if highest.get("format") != "nexus-portable-zip-v1":
+            if (highest.get("format") not in {"nexus-portable-zip-v1", "nexus-posix-zip-v1"}
+                    or highest.get("format") != payload.get("format")
+                    or highest.get("platform") != platform or highest.get("arch") != arch):
                 raise ValueError("Invalid portable release history")
             proposed, recorded = version_tuple(new.version), version_tuple(highest["version"])
             if proposed < recorded or (proposed == recorded and hashlib.sha256(canonical(highest)).hexdigest() != new_id):
