@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
+import re
+import ssl
 import json
 import os
 import tempfile
@@ -444,7 +447,7 @@ class ModpackUpdater:
             return "integrity"
         if any(word in text for word in ("space", "мест", "disk")):
             return "storage"
-        if isinstance(error, (urllib.error.URLError, TimeoutError, ConnectionError)):
+        if isinstance(error, (urllib.error.URLError, TimeoutError, ConnectionError, http.client.IncompleteRead)):
             return "network"
         if isinstance(error, PermissionError):
             return "permission"
@@ -492,7 +495,7 @@ class ModpackUpdater:
         try:
             from nexus_launcher.resumable_download import receive
             def open_response(offset):
-                headers = {"User-Agent": "NexusLauncher/1.0", "Accept-Encoding": "identity"}
+                headers = {"User-Agent": "NexusLauncher/1.0"}
                 if offset:
                     headers["Range"] = f"bytes={offset}-"
                 request = urllib.request.Request(release.url, headers=headers)
@@ -820,21 +823,48 @@ class ModpackUpdater:
         report = emit or self._emit_progress
         temporary.parent.mkdir(parents=True, exist_ok=True)
         last_error: Exception | None = None
+        deadline = time.monotonic() + 1800
         for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Pack download time budget exceeded")
             offset = temporary.stat().st_size if temporary.is_file() else 0
             if entry.size and offset > entry.size:
                 temporary.unlink(missing_ok=True)
                 offset = 0
-            headers = {"User-Agent": "NexusLauncher/1.0"}
+            headers = {"User-Agent": "NexusLauncher/1.0", "Accept-Encoding": "identity"}
             if offset:
                 headers["Range"] = f"bytes={offset}-"
             request = urllib.request.Request(entry.url, headers=headers)
             started = time.monotonic()
+            network_step = True
+            retryable_body_error = False
             try:
-                with open_https(request, timeout=60, allowed_hosts=trusted_download_hosts()) as response:
+                with open_https(request, timeout=30, allowed_hosts=trusted_download_hosts()) as response:
+                    network_step = False
                     status = int(getattr(response, "status", response.getcode() if hasattr(response, "getcode") else 200))
                     content_range = str(response.headers.get("Content-Range", ""))
-                    resumed = offset > 0 and status == 206 and content_range.startswith(f"bytes {offset}-")
+                    if response.headers.get("Content-Encoding", "identity") not in ("", "identity"):
+                        raise ValueError("Encoded pack response is forbidden")
+                    resumed = offset > 0 and status == 206
+                    if resumed:
+                        match = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+)", content_range)
+                        if (not match or int(match[1]) != offset or int(match[2]) < offset
+                                or int(match[2]) >= int(match[3]) or int(match[3]) > MAX_PACK_BYTES
+                                or entry.size and int(match[3]) != entry.size):
+                            raise ValueError("Invalid pack download range")
+                        response_end = int(match[2]) + 1
+                    elif status != 200 or content_range:
+                        raise ValueError("Unexpected pack download response")
+                    else:
+                        response_end = entry.size or MAX_PACK_BYTES
+                    length = response.headers.get("Content-Length")
+                    if length is not None:
+                        if not str(length).isascii() or not str(length).isdigit() or len(str(length)) > 20:
+                            raise ValueError("Invalid pack download length")
+                        expected_length = response_end - offset if resumed else entry.size
+                        if int(length) > MAX_PACK_BYTES or expected_length and int(length) != expected_length:
+                            raise ValueError("Pack download length mismatch")
+                        response_end = (offset if resumed else 0) + int(length)
                     if offset and not resumed:
                         # A server that ignores Range must never be appended to.
                         offset = 0
@@ -848,26 +878,41 @@ class ModpackUpdater:
                                 verifier.update(prefix_block)
                     with temporary.open(mode) as output:
                         report("downloading", entry.path, transferred[0] + received, total, attempt)
-                        deadline = time.monotonic() + 300
-                        while block := getattr(response, "read1", response.read)(1024 * 1024):
+                        last_report = time.monotonic()
+                        while True:
+                            network_step = True
+                            block = getattr(response, "read1", response.read)(256 * 1024)
+                            network_step = False
                             if time.monotonic() >= deadline:
                                 raise TimeoutError("File download deadline exceeded")
+                            if not block:
+                                break
                             received += len(block)
-                            if received > MAX_PACK_BYTES or (entry.size and received > entry.size):
+                            if received > response_end or received > MAX_PACK_BYTES or (entry.size and received > entry.size):
                                 raise ValueError(f"Файл слишком большой: {entry.name}")
                             verifier.update(block)
-                            output.write(block)
-                            report("downloading", entry.path, min(total, transferred[0] + received) if total else transferred[0] + received, total, attempt)
+                            if output.write(block) != len(block):
+                                raise OSError("Short write to pack cache")
+                            # Persist/UI progress at most 10 Hz per file, not per network chunk.
+                            # The full byte count is always reported before verification.
+                            sampled = time.monotonic()
+                            if sampled - last_report >= 0.1:
+                                report("downloading", entry.path, min(total, transferred[0] + received) if total else transferred[0] + received, total, attempt)
+                                last_report = sampled
+                        report("downloading", entry.path, transferred[0] + received, total, attempt)
                         output.flush()
                         os.fsync(output.fileno())
                 self.log(f"VERIFYING • {entry.name}")
                 report("verifying", entry.path, transferred[0] + received, total, attempt)
-                if entry.size and received != entry.size:
+                if (entry.size and received != entry.size or
+                        (resumed or length is not None) and received != response_end):
+                    retryable_body_error = True
                     raise ValueError(f"Размер файла не совпадает: {entry.name}")
                 try:
                     verifier.finish()
                 except ValueError:
                     temporary.unlink(missing_ok=True)
+                    retryable_body_error = True
                     raise
                 # Keep the independent staged-file readback before apply/recovery.
                 if sha256_file(temporary) != entry.sha256:
@@ -881,11 +926,17 @@ class ModpackUpdater:
                 return received
             except Exception as error:
                 last_error = error
-                if isinstance(error, urllib.error.HTTPError) and error.code in {400, 401, 403, 404, 429}:
+                reason = getattr(error, "reason", error)
+                if isinstance(error, urllib.error.HTTPError):
+                    error.close()
+                if (isinstance(reason, ssl.SSLError) or
+                        not network_step and not retryable_body_error):
+                    break
+                if isinstance(error, urllib.error.HTTPError) and error.code not in {408, 500, 502, 503, 504}:
                     break  # Refusal/rate limit: no immediate automatic retry.
                 if attempt < DOWNLOAD_ATTEMPTS:
                     self.log(f"Повтор загрузки {entry.name}: {attempt + 1}/{DOWNLOAD_ATTEMPTS}")
-                    time.sleep(0.25 * attempt)
+                    time.sleep(min(0.5 * 2 ** (attempt - 1), 8))
         assert last_error is not None
         if isinstance(last_error, (urllib.error.URLError, TimeoutError, ConnectionError)):
             from nexus_launcher.download_sources import transfer_error

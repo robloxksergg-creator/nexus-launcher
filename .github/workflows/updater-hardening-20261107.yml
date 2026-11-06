@@ -3,6 +3,8 @@ name: Updater reliability across desktop platforms
   push:
     branches: [verify/updater-hardening-20261107]
     paths:
+      - 'nexus_launcher/updater.py'
+      - 'tests/test_pack_download_reliability.py'
       - 'nexus_launcher/resumable_download.py'
       - 'nexus_launcher/self_update.py'
       - 'nexus_launcher/portable_transition.py'

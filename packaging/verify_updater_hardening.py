@@ -10,6 +10,8 @@ TESTS=[
  'test_self_update','test_github_updates','test_portable_package','test_signed_update',
  'test_bootstrap_installation','test_posix_updates','test_posix_update_signing',
  'test_public_update_identity','test_beta_update_trust',
+ 'test_pack_download_reliability','test_native_transfer','test_native_http',
+ 'test_functional_pass5','test_parallel_pack_staging','test_parallel_downloads','test_updater',
 ]
 
 def main():
