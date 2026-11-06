@@ -1503,6 +1503,9 @@ class Launcher(QMainWindow):
                                            lambda: self.account_profile, lambda: self.account_client)
             instance = self.instance_service.load(instance_id)
             folder = self.instance_service.path_for(instance_id)
+            self._sync_skin_for_instance(folder)
+            if instance.loader in ("", "vanilla") and profile.skin_png:
+                self.bridge.status.emit("Скин NEXUS подготовлен; Vanilla не отображает его без совместимого загрузчика скинов.")
             core = MinecraftLauncher(folder, self.bridge.status.emit, self.bridge.progress.emit)
             process = core.launch(
                 instance.minecraft_version,
@@ -1997,9 +2000,13 @@ class Launcher(QMainWindow):
                 except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as error:
                     with launcher_log.open("a", encoding="utf-8") as output:
                         output.write(f"Manifest unavailable: {type(error).__name__}: {error}\n")
-                    if not updater.can_launch_offline():
+                    offline_report = updater.offline_launch_report()
+                    launch_log("Offline verification: " + json.dumps(offline_report, ensure_ascii=False))
+                    if not offline_report["ready"]:
                         raise RuntimeError(
-                            "Не удалось подключиться к серверу обновлений, а локальная сборка не прошла проверку"
+                            "Не удалось подключиться к серверу обновлений; локальная проверка: "
+                            + offline_report["reason"]
+                            + ". Откройте диагностику сборки; данные и миры не удалены."
                         ) from error
                     self.bridge.status.emit("Сервер обновлений недоступен — запускаю последнюю проверенную сборку")
             self._sync_skin_for_instance(folder)

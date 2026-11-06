@@ -803,21 +803,33 @@ class ModpackUpdater:
         self._path(STATE_DIR + "/update-transaction.json").unlink(missing_ok=True)
         self.log("ROLLING_BACK • предыдущая сборка восстановлена")
 
+    def offline_launch_report(self) -> dict:
+        """Read-only reasons for refusing cached pack launch; never repairs files."""
+        result = {"ready": False, "reason": "NO_VERIFIED_INSTALL", "missing": [], "changed": []}
+        try:
+            state = self._read_state()
+            if self.transaction_path.exists() or self._path(".nexus-launcher/file-transaction").exists():
+                result["reason"] = "INCOMPLETE_INSTALL"
+                return result
+            managed = state.get("managed_files", {})
+            if not state.get("last_successful_update") or not managed:
+                return result
+            damaged = False
+            for relative, digest in managed.items():
+                target = self._path(relative)
+                category = "missing" if not target.is_file() else "changed" if sha256_file(target) != digest else None
+                if category:
+                    damaged = True
+                    if len(result[category]) < 8:
+                        result[category].append(relative)
+            result["ready"] = not damaged
+            result["reason"] = "FILES_CHANGED" if damaged else "VERIFIED"
+        except (OSError, ValueError, TypeError):
+            result["reason"] = "INVENTORY_OR_READ_ERROR"
+        return result
+
     def can_launch_offline(self) -> bool:
-        state = self._read_state()
-        if (
-            not state.get("last_successful_update")
-            or self.transaction_path.exists()
-            or self._path(".nexus-launcher/file-transaction").exists()
-        ):
-            return False
-        managed = state.get("managed_files", {})
-        if not managed:
-            return False
-        return all(
-            self._path(relative).is_file() and sha256_file(self._path(relative)) == digest
-            for relative, digest in managed.items()
-        )
+        return self.offline_launch_report()["ready"]
 
     def _download_file(self, entry: PackFile, temporary: Path, transferred: list[int], total: int, *, emit=None) -> int:
         report = emit or self._emit_progress

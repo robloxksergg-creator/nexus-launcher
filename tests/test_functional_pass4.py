@@ -156,12 +156,15 @@ def test_test_launch_metadata_is_separate_from_normal_launch(tmp_path, monkeypat
     class Signal:
         def emit(self, *_): pass
     monkeypatch.setattr(modern_main, "MinecraftLauncher", Core)
-    owner = SimpleNamespace(account_profile=SimpleNamespace(minecraft_nick="Player"),
+    synced = []
+    owner = SimpleNamespace(account_profile=SimpleNamespace(minecraft_nick="Player", skin_png=None),
+        _sync_skin_for_instance=lambda folder: synced.append(folder),
         account_client=SimpleNamespace(game_ticket=lambda: "ticket"), instance_service=instances,
         config={}, bridge=SimpleNamespace(status=Signal(), progress=Signal(), finished=Signal(), game_exited=Signal(), failed=Signal()),
         game_process=None)
     modern_main.Launcher._launch_user_instance_worker(owner, instance.id, "test")
     saved = instances.load(instance.id)
+    assert synced == [instances.path_for(instance.id)]
     assert saved.last_test_launch
     assert saved.last_test_exit_code == 7
     assert saved.last_launch == ""
