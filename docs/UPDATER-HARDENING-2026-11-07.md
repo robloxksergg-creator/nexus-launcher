@@ -15,7 +15,7 @@ Scope: existing managed Windows and shared POSIX source. No production feed, rel
 
 Local Windows/Python 3.12.14: 268 passed, 2 POSIX-only checks skipped across the 15 selected updater suites. Tests include newly generated Ed25519 signatures, controlled stream interruptions, simulated journal-write faults, real subprocess termination of the legacy test helper, and synthetic process adapters for the new managed reconciliation. No game, account or production feed was executed.
 
-Cross-platform workflow: `.github/workflows/updater-hardening-20261107.yml`, one Windows/Linux/macOS job, at most 15 minutes each, no signing/publishing permissions or product secrets. CI results are pending at document creation. `packaging/verify_updater_hardening.py` specifies the exact suites and rejects unexpected parent outbound connections.
+Cross-platform workflow: `.github/workflows/updater-hardening-20261107.yml`, one Windows/Linux/macOS job, at most 15 minutes each, no signing/publishing permissions or product secrets. At document creation CI was pending. Final verification: [run 42302472115](https://github.com/robloxksergg-creator/nexus-launcher/actions/runs/42302472115), source commit `46c8db0574de1966e709e5097fe0684e31d28d35`, completed successfully: Ubuntu 24.04 — 270 passed; macOS 15 — 270 passed; Windows 2025 — 268 passed, 2 POSIX-only checks skipped. `packaging/verify_updater_hardening.py` specifies the exact suites and rejects unexpected parent outbound connections.
 
 HTTP transfer interpretation follows [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#name-content-range). Partial segment length is distinct from complete representation length; a successful transfer still requires the signed complete-file hash.
 
