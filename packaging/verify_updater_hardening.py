@@ -1,6 +1,7 @@
 """Offline regression runner. No product signing keys, game, accounts or feed."""
 from pathlib import Path
 import sys
+import tempfile
 from unittest.mock import patch
 import pytest
 
@@ -17,6 +18,9 @@ TESTS=[
 def main():
     root=Path(__file__).resolve().parents[1]
     sys.path.insert(0,str(root))
+    # macOS /var aliases /private/var. Test directories must use their real path;
+    # production symlink/reparse rejection remains unchanged.
+    tempfile.tempdir=str(Path(tempfile.gettempdir()).resolve())
     # Tests patch transport with local signed fixtures. Unexpected parent HTTP
     # fails; synthetic child processes exercise only private inherited pipes.
     with patch('socket.create_connection',side_effect=AssertionError('Outbound transport forbidden')):
