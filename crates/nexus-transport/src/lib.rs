@@ -11,7 +11,8 @@ use tokio::runtime::Runtime;
 pub const MAX_READ_BYTES: usize = 1024 * 1024;
 const MAX_BODY_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_REDIRECTS: usize = 10;
-const TOTAL_TIMEOUT: Duration = Duration::from_secs(300);
+// Full-file budget; the caller still supplies a separate idle/connect timeout.
+const TOTAL_TIMEOUT: Duration = Duration::from_secs(1800);
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DownloadError {
