@@ -5,6 +5,7 @@ here is a testable contract, not an authenticated Windows process health proof.
 """
 import hashlib
 import json
+import re
 import uuid
 from pathlib import Path
 
@@ -56,9 +57,9 @@ def prepare_transition(root: Path, candidate: str, expected_active: str, *, plat
         new, payload, new_id, envelope = _slot(root, candidate, keys)
         if payload.get("available") is not True or payload.get("platform") != platform or payload.get("arch") != arch:
             raise ValueError("Portable candidate is not approved for this platform")
-        if tuple(map(int, new.version.split("."))) <= tuple(map(int, old.version.split("."))):
-            raise ValueError("Portable downgrade/replay refused")
         from nexus_launcher.self_update import version_tuple
+        if version_tuple(new.version) <= version_tuple(old.version):
+            raise ValueError("Portable downgrade/replay refused")
         history = checked_path(root, "highest-package.json")
         if history.exists():
             highest = verify_signature(_read(root, "highest-package.json"), keys=keys)
@@ -91,6 +92,55 @@ def recover_transition(root: Path):
         journal["phase"] = "UNKNOWN"
         atomic_json(checked_path(root, "transition.json"), journal)
         return journal
+
+
+def _validated_journal(root,phases):
+    journal=_read(root,'transition.json')
+    fields={'schema','phase','operation_id','previous','candidate','previous_identity','candidate_identity'}
+    if (not isinstance(journal,dict) or set(journal)!=fields or type(journal['schema']) is not int
+            or journal['schema']!=1 or journal['phase'] not in phases
+            or not isinstance(journal['operation_id'],str) or not re.fullmatch('[0-9a-f]{32}',journal['operation_id'])):
+        raise ValueError('Transition cannot be safely reconciled')
+    for name in ('previous','candidate'):
+        value=journal[name]
+        if (not isinstance(value,dict) or set(value)!={'slot'} or not isinstance(value['slot'],str)
+                or not re.fullmatch(r'portable-stage-[A-Za-z0-9_-]+',value['slot'])):
+            raise ValueError('Invalid transition pointer')
+        identity=journal[name+'_identity']
+        if not isinstance(identity,str) or not re.fullmatch('[0-9a-f]{64}',identity):
+            raise ValueError('Invalid transition identity')
+    if journal['previous']==journal['candidate']:
+        raise ValueError('Transition slots must differ')
+    return journal
+
+
+def _recover_decided_transition(root: Path, *, keys=None):
+    """Caller holds update_lock AND the adapter's exclusive lifetime lease.
+
+    Only pre-launch cancellation or an already decided pointer write can resume.
+    LAUNCHING/UNKNOWN never imply child exit and are deliberately not handled.
+    """
+    journal=_validated_journal(root,{'PREPARED','COMMITTING','ROLLING_BACK'})
+    pointer=_pointer(root)
+    if pointer not in (journal['previous'],journal['candidate']):
+        raise ValueError('Active slot conflict during recovery')
+    if journal['phase']=='PREPARED' and pointer!=journal['previous']:
+        raise ValueError('Unexpected pre-launch active pointer')
+    highest=verify_signature(_read(root,'highest-package.json'),keys=keys)
+    if hashlib.sha256(canonical(highest)).hexdigest()!=journal['candidate_identity']:
+        raise ValueError('Recovery release history mismatch')
+    healthy=journal['phase']=='COMMITTING'
+    chosen=journal['candidate'] if healthy else journal['previous']
+    # Reconciliation is of a previously decided install, not a fresh online install.
+    _,_,identity,_=_slot(root,chosen['slot'],keys,installed=True)
+    expected=journal['candidate_identity'] if healthy else journal['previous_identity']
+    if identity!=expected:
+        raise ValueError('Recovery slot identity mismatch')
+    if pointer!=chosen:
+        atomic_json(checked_path(root,'active.json'),chosen)
+    journal['phase']='COMPLETE' if healthy else 'ROLLED_BACK'
+    atomic_json(checked_path(root,'transition.json'),journal)
+    return journal
 
 
 def resolve_transition(root: Path, result: str, *, operation_id: str, candidate_identity: str, keys=None):

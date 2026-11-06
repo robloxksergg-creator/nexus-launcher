@@ -16,11 +16,11 @@ from pathlib import Path
 from nexus_launcher.portable_bootstrap import run_prepared_transition
 from nexus_launcher.portable_package import (MAX_TOTAL_BYTES, _verify_staged_files, stage_portable_archive,
                               verify_installed_inventory, verify_portable_inventory)
-from nexus_launcher.portable_transition import _pointer, _read, prepare_transition
+from nexus_launcher.portable_transition import _pointer, _read, _recover_decided_transition, _validated_journal, prepare_transition
 from nexus_launcher.resource_limits import MAX_RESPONSE_BYTES, ensure_space, read_limited
 from nexus_launcher.safe_paths import checked_path, pinned_directory
 from nexus_launcher.secure_http import open_https, origin
-from nexus_launcher.signed_release import verify_envelope
+from nexus_launcher.signed_release import canonical,verify_envelope,verify_signature
 from nexus_launcher.update_state import update_lock
 
 
@@ -98,15 +98,34 @@ class PortableStartupBackend:
     def _current(self):
         # Installed signature remains valid after manifest freshness expires.
         transition = checked_path(self.root, "transition.json")
-        if transition.exists() and _read(self.root, "transition.json").get("phase") not in {"COMPLETE", "ROLLED_BACK"}:
-            raise ValueError("Unresolved package transition")
+        journal=None
+        if transition.exists():
+            phase=_read(self.root,'transition.json').get('phase')
+            if phase in {'PREPARED','COMMITTING','ROLLING_BACK'}:
+                # Native adapters retain the lifetime lease in the child too.
+                # A surviving managed child prevents another bootstrap acquiring it.
+                if self.adapter.wait_parent() is not True:
+                    raise ValueError('Exclusive process state not confirmed')
+                _recover_decided_transition(self.root,keys=self.keys)
+            elif phase not in {'COMPLETE','ROLLED_BACK'}:
+                raise ValueError("Unresolved package transition")
+            journal=_validated_journal(self.root,{'COMPLETE','ROLLED_BACK'})
         name = _pointer(self.root)["slot"]
+        selected='candidate' if journal and journal['phase']=='COMPLETE' else 'previous'
+        if journal and journal[selected]!={'slot':name}:
+            raise ValueError('Installed pointer disagrees with completed transition')
         if not isinstance(name, str) or not re.fullmatch(r"portable-stage-[A-Za-z0-9_-]+", name):
             raise ValueError("Invalid installed package pointer")
         slot = checked_path(self.root, "slots/" + name)
         if _read(slot, "journal.json") != {"schema": 1, "phase": "READY"}:
             raise ValueError("Installed slot incomplete")
-        inventory = verify_installed_inventory(_read(slot, "envelope.json"), keys=self.keys)
+        envelope=_read(slot,'envelope.json')
+        inventory = verify_installed_inventory(envelope, keys=self.keys)
+        payload=verify_signature(envelope,keys=self.keys)
+        if payload.get('platform')!=self.platform or payload.get('arch')!=self.arch or payload.get('available') is not True:
+            raise ValueError('Installed package is not approved for this platform')
+        if journal and hashlib.sha256(canonical(payload)).hexdigest()!=journal[selected+'_identity']:
+            raise ValueError('Installed identity disagrees with completed transition')
         with pinned_directory(checked_path(slot, "files")):
             _verify_staged_files(slot / "files", inventory)
         return name, inventory
@@ -131,9 +150,8 @@ class PortableStartupBackend:
         inventory = verify_portable_inventory(envelope, keys=self.keys)
         with update_lock(self.root):
             _, current = self._current()
-        def version(value):
-            return tuple(int(part) for part in value.split(".")) + (0,) * (4 - len(value.split(".")))
-        if version(inventory.version) <= version(current.version):
+        from nexus_launcher.self_update import version_tuple
+        if version_tuple(inventory.version) <= version_tuple(current.version):
             return None
         return json.loads(json.dumps(envelope, allow_nan=False))
 
@@ -148,8 +166,13 @@ class PortableStartupBackend:
         if archive.parent != checked_path(self.root, "cache") or not re.fullmatch(r"package-[A-Za-z0-9_-]+\.zip", archive.name):
             raise ValueError("Archive is not in owned update cache")
         checked_path(archive.parent, archive.name)
-        with pinned_directory(checked_path(self.root, "slots")):
-            return stage_portable_archive(archive, release, self.root / "slots", keys=self.keys)
+        with pinned_directory(archive.parent),pinned_directory(checked_path(self.root, "slots")):
+            try:
+                return stage_portable_archive(archive, release, self.root / "slots", keys=self.keys)
+            finally:
+                # This exact owned cache archive is no longer needed by the slot.
+                # Never prune installed slots or scan/delete user directories here.
+                checked_path(archive.parent,archive.name).unlink(missing_ok=True)
 
     def activate(self, candidate):
         candidate = Path(candidate).absolute()

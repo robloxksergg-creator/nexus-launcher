@@ -59,10 +59,12 @@ def open_release_url(request, timeout):
 
 
 def version_tuple(value: str) -> tuple[int, ...]:
-    if not re.fullmatch(r"v?\d{1,6}(?:\.\d{1,6}){2,3}", value):
+    if not isinstance(value,str) or not re.fullmatch(r"v?\d{1,6}(?:\.\d{1,6}){2,3}", value):
         raise ValueError("Некорректная версия обновления")
     clean = value.removeprefix("v")
-    return tuple(int(part) for part in clean.split("."))
+    parts=tuple(int(part) for part in clean.split("."))
+    # 1.2.3 and 1.2.3.0 are the same release ordering, not an upgrade.
+    return parts+(0,)*(4-len(parts))
 
 
 @dataclass(frozen=True)

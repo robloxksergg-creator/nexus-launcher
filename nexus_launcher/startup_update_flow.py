@@ -6,6 +6,8 @@ an uncertain child process must never enable another launch or update attempt.
 """
 from dataclasses import dataclass
 from enum import Enum
+import ssl
+import urllib.error
 
 
 class Phase(str, Enum):
@@ -127,6 +129,19 @@ class StartupFlow:
                 self._blocked()
             else:
                 detail = "Повторите проверку или запустите установленную версию, если она доступна."
+                if self.view.phase in {Phase.CHECKING,Phase.DOWNLOADING}:
+                    reason=getattr(error,'reason',error)
+                    if isinstance(reason,ssl.SSLError):
+                        detail='Не удалось подтвердить защищённое соединение. Проверка TLS не отключалась. Код: UPDATE_TLS.'
+                    elif isinstance(error,(TimeoutError,ConnectionError,urllib.error.URLError)):
+                        detail='Сервер обновлений недоступен или соединение прервано. Код: UPDATE_NETWORK.'
+                    elif isinstance(error,ValueError):
+                        detail='Данные обновления не прошли проверку. Код: UPDATE_REJECTED.'
+                    elif isinstance(error,OSError):
+                        detail='Не удалось прочитать или записать данные обновления. Код: UPDATE_IO.'
+                    else:
+                        detail='Не удалось завершить подготовку обновления. Код: UPDATE_FAILED.'
+                    detail+=' Можно повторить проверку или открыть установленную версию, если она прошла проверку.'
                 if self.view.phase == Phase.VERIFYING:
                     # Public categories only, never backend paths or exception text.
                     if isinstance(error, OSApprovalRequired):
