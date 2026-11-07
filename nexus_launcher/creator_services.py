@@ -163,6 +163,9 @@ class StudioService:
     def check_metadata(project):
         if not isinstance(project, dict):
             raise ValueError("Некорректные метаданные проекта")
+        if "releasePlan" in project:
+            from nexus_launcher.creator_release_plan import validate_release_plan
+            validate_release_plan(project["releasePlan"])
         for field in ("name", "version", "kind", "description", "changelog"):
             if not isinstance(project.get(field, ""), str):
                 raise ValueError("Некорректное поле: " + field)

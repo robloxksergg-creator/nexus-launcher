@@ -3,9 +3,9 @@ from pathlib import Path
 import os
 import threading
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QDateTime
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QComboBox, QPlainTextEdit, QPushButton, QListWidget, QFormLayout, QMessageBox, QFileDialog, QStackedWidget, QScrollArea, QGridLayout, QMenu, QTabWidget, QApplication)
+    QComboBox, QPlainTextEdit, QPushButton, QListWidget, QFormLayout, QMessageBox, QFileDialog, QStackedWidget, QScrollArea, QGridLayout, QMenu, QTabWidget, QApplication, QDateTimeEdit, QCheckBox)
 
 from nexus_launcher.creator_services import Capabilities, StudioService, SIDES
 from nexus_launcher.publishing import LocalSubmissionRepository, PublishingService
@@ -47,6 +47,9 @@ class StudioPage(QWidget):
         root.addWidget(creator)
         root.addWidget(academy)
         self.creator_workspace = None
+        website_application=QPushButton('Заявка на сайт и лаунчер')
+        website_application.clicked.connect(self.open_website_application)
+        root.addWidget(website_application)
         root.addWidget(QLabel("Проекты используют сборки библиотеки. Здесь готовится локальный submission package; публикацию выполняет только будущий trusted backend."))
         self.stats = QLabel("Создайте проект или импортируйте сборку в библиотеку.")
         root.addWidget(self.stats)
@@ -74,6 +77,43 @@ class StudioPage(QWidget):
         editor.addTab(presentation_panel, "Презентация")
         editor.addTab(mods_panel, "Состав пакета")
         self.editor = editor
+        release_panel = QWidget()
+        release_form = QFormLayout(release_panel)
+        release_form.setRowWrapPolicy(QFormLayout.WrapLongRows)
+        editor.addTab(release_panel, "План выпуска")
+        self.release_destination = QComboBox()
+        for label, value in (("Сайт и лаунчер", "both"), ("Сначала / только лаунчер", "launcher"), ("Только сайт", "website")):
+            self.release_destination.addItem(label, value)
+        self.release_access = QComboBox()
+        for label, value in (("Бесплатно", "PUBLIC"), ("Платно · подключение оплаты отдельно", "PAID"), ("Приватно · по приглашению", "PRIVATE")):
+            self.release_access.addItem(label, value)
+        release_form.addRow("Где публиковать", self.release_destination)
+        release_form.addRow("Доступ к сборке", self.release_access)
+        self.release_dates = {}
+        for key, label in (("websiteAt", "Выпуск сайта"), ("launcherAt", "Выпуск в лаунчере"), ("serverAt", "Объявление открытия сервера")):
+            controls = QHBoxLayout()
+            enabled = QCheckBox("Указать дату")
+            date = QDateTimeEdit(QDateTime.currentDateTime())
+            date.setCalendarPopup(True)
+            date.setDisplayFormat("dd.MM.yyyy HH:mm")
+            date.setEnabled(False)
+            enabled.toggled.connect(date.setEnabled)
+            enabled.toggled.connect(self._dirty)
+            date.dateTimeChanged.connect(self._dirty)
+            controls.addWidget(enabled)
+            controls.addWidget(date)
+            for days, title in ((10, "+10 дней"), (35, "+5 недель")):
+                preset = QPushButton(title)
+                preset.clicked.connect(lambda _=False, n=days, d=date, e=enabled: (e.setChecked(True), d.setDateTime(QDateTime.currentDateTime().addDays(n))))
+                controls.addWidget(preset)
+            release_form.addRow(label, controls)
+            self.release_dates[key] = (enabled, date)
+        self.release_destination.currentIndexChanged.connect(self._release_destination_changed)
+        self.release_destination.currentIndexChanged.connect(self._dirty)
+        self.release_access.currentIndexChanged.connect(self._dirty)
+        note = QLabel("Сохраняется только локальный план для проверки NEXUS. Даты — в часовом поясе компьютера, в файле — UTC. Без даты — по согласованию после одобрения. Автопубликация, оплата и публичный таймер пока не подключены. Сервер на хостинге не запускается.")
+        note.setWordWrap(True)
+        release_form.addRow(note)
         self.review_panel = QWidget()
         review_layout = QVBoxLayout(self.review_panel)
         review_layout.addWidget(QLabel("REVIEWER INBOX · imported packages are untrusted"))
@@ -187,6 +227,33 @@ class StudioPage(QWidget):
         self.stack.setCurrentWidget(self.creator_workspace)
         if academy:
             self.creator_workspace.open_academy()
+
+    def open_website_application(self):
+        if not self.identifier:
+            self.output.setPlainText('Сначала создайте или выберите локальный проект.');return
+        if not self.save():return
+        owner=getattr(self.window(),'services',self.window())
+        profile=getattr(owner,'account_profile',None)
+        client=getattr(owner,'account_client',None)
+        if not profile or not client or not profile.user_id:
+            self.output.setPlainText('Войдите в аккаунт NEXUS перед открытием заявки.');return
+        from nexus_launcher.creator_page_ui import CreatorPageDialog
+        dialog=CreatorPageDialog(client,profile,self.service,self.identifier,self)
+        dialog.exec()
+
+    def _release_destination_changed(self, *_):
+        destination = self.release_destination.currentData()
+        for key, (enabled, date) in self.release_dates.items():
+            allowed = not (key == "websiteAt" and destination == "launcher" or key == "launcherAt" and destination == "website")
+            if not allowed:
+                enabled.setChecked(False)
+            enabled.setEnabled(allowed)
+            date.setEnabled(allowed and enabled.isChecked())
+
+    def _release_plan(self):
+        return dict(destination=self.release_destination.currentData(), access=self.release_access.currentData(),
+                    **{key: date.dateTime().toUTC().toString("yyyy-MM-ddTHH:mm:00.000Z") if enabled.isChecked() else None
+                       for key, (enabled, date) in self.release_dates.items()})
 
     def shutdown_learning(self):
         if self.creator_workspace is not None:
@@ -351,6 +418,14 @@ class StudioPage(QWidget):
             self.kind.setCurrentText(self.project["kind"])
             self.version.setText(self.project["version"])
             self.channel.setCurrentText(self.project.get("channel", "dev"))
+            from nexus_launcher.creator_release_plan import default_release_plan
+            plan = self.project.get("releasePlan", default_release_plan())
+            self.release_destination.setCurrentIndex(self.release_destination.findData(plan["destination"]))
+            self.release_access.setCurrentIndex(self.release_access.findData(plan["access"]))
+            for key, (enabled, date) in self.release_dates.items():
+                enabled.setChecked(plan[key] is not None)
+                date.setDateTime(QDateTime.fromString(plan[key], Qt.ISODate).toLocalTime() if plan[key] else QDateTime.currentDateTime())
+            self._release_destination_changed()
             for key, field in self.metadata_fields.items():
                 field.setText(self.project.get("metadata", {}).get(key, ""))
             for key, field in self.assets.items():
@@ -411,6 +486,7 @@ class StudioPage(QWidget):
             return False
         try:
             self.project.update(name=self.name.text(), kind=self.kind.currentText(), version=self.version.text(),
+                                releasePlan=self._release_plan(),
                                 channel=self.channel.currentText(), description=self.description.toPlainText(),
                                 changelog=self.changelog.toPlainText(), presentation={k: v.text().strip() for k, v in self.assets.items()},
                                 metadata={k: v.text().strip() for k, v in self.metadata_fields.items()})

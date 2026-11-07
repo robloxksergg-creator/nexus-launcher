@@ -83,6 +83,11 @@ class PlatformLauncher(CoreLauncher):
         if not self.config.get("welcomeCompleted", False) and not self.config.get("recentWorlds"):
             self._navigate("welcome", "NEXUS / ДОБРО ПОЖАЛОВАТЬ")
 
+    def _show_community_catalogue(self):
+        from nexus_launcher.creator_catalogue_ui import CreatorCatalogueDialog
+        dialog=CreatorCatalogueDialog(self.account_client,self)
+        dialog.exec()
+
     def _build(self):
         self.config.update(canonical_world_preferences(self.config))
         self.config.setdefault("videoBackgrounds", True)

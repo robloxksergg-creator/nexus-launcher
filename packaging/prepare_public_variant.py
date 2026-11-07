@@ -5,12 +5,14 @@ import re
 import shutil
 
 
-def prepare(source, destination, version):
+def prepare(source, destination, version, *, audience='public'):
     source, destination = Path(source).resolve(), Path(destination).absolute()
     if destination.exists() or destination.is_relative_to(source):
         raise ValueError('Variant destination must be new and outside source')
     if not re.fullmatch(r'[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}', version):
         raise ValueError('Numeric release version required')
+    if audience not in ('public', 'testers'):
+        raise ValueError('Unknown release audience')
     paths = ['nexus_launcher', 'packaging', 'assets', 'LICENSE', 'COPYRIGHT.md']
     destination.mkdir()
     for name in paths:
@@ -24,6 +26,12 @@ def prepare(source, destination, version):
                           identity.read_text(encoding='utf-8'), flags=re.MULTILINE)
     if count != 1:
         raise ValueError('Unexpected build identity source')
+    if audience == 'testers':
+        text, count = re.subn(r'^CHANNEL = "stable"$', 'CHANNEL = "beta"', text, flags=re.MULTILINE)
+        if count != 1 or text.count('releases/download/updates-preview/portable-envelope.json') != 1:
+            raise ValueError('Unexpected public channel source')
+        text = text.replace('releases/download/updates-preview/portable-envelope.json',
+                            'releases/download/updates-testers/portable-envelope.json')
     identity.write_text(text, encoding='utf-8')
     components = ', '.join(version.split('.') + ['0'])
     for filename in ('public_version_info.txt', 'public_bootstrap_version_info.txt'):
@@ -41,5 +49,6 @@ if __name__ == '__main__':
     parser.add_argument('--source', required=True)
     parser.add_argument('--destination', required=True)
     parser.add_argument('--version', required=True)
+    parser.add_argument('--audience', choices=('public', 'testers'), default='public')
     args = parser.parse_args()
-    prepare(args.source, args.destination, args.version)
+    prepare(args.source, args.destination, args.version, audience=args.audience)

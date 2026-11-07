@@ -2129,6 +2129,18 @@ class Launcher(QMainWindow):
 
     def _failed(self, text):
         from nexus_launcher.launch_feedback import launch_failure_message
+        from nexus_launcher.failure_reporting import FailureReporter
+        # Diagnostics must never block recovery or change the launch decision.
+        try:
+            if not hasattr(self, '_failure_reporter'):
+                self._failure_reporter = FailureReporter()
+            client, profile = self.account_client, self.account_profile
+            self._failure_reporter.submit(client, profile, text, CURRENT_VERSION,
+                enabled=self.config.get('automaticErrorReports', False),
+                allowed=lambda: self.config.get('automaticErrorReports') is True
+                    and self.account_client is client and self.account_profile is profile)
+        except Exception:
+            pass
         self._reset_play()
         QMessageBox.critical(self, "NEXUS Launcher", launch_failure_message(text))
 

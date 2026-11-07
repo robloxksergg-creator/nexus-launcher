@@ -68,6 +68,7 @@ class NexusProfile:
     tester: bool = False
     user_id: str = ""
     profile_completed: bool = False
+    experience_role: str | None = None
 
 
 class NexusAccountClient:
@@ -129,7 +130,7 @@ class NexusAccountClient:
             headers["Idempotency-Key"] = idempotency_key
         body = None
         if payload is not None:
-            body = json.dumps(payload).encode("utf-8")
+            body = json.dumps(payload,ensure_ascii=path!='/api/launcher/creator-pages').encode("utf-8")
             headers["Content-Type"] = "application/json"
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -283,6 +284,56 @@ class NexusAccountClient:
             raise ProtocolError("Некорректный список сборок.")
         return builds
 
+    def creator_catalogue(self, after=None):
+        from nexus_launcher.creator_catalogue import validate_creator_catalogue
+        if after is not None and (not isinstance(after,str) or not re.fullmatch(r'community-[a-z0-9-]{1,70}',after)):
+            raise ProtocolError('Некорректная страница каталога.')
+        result, _ = self._request('/api/launcher/creator-catalogue'+('?after='+after if after else ''))
+        try:return validate_creator_catalogue(result)
+        except ValueError as error:raise ProtocolError('Некорректный каталог сообщества.') from error
+
+    def creator_pages(self, profile, operation=None):
+        """Existing launcher bearer session only; application data grants no publication."""
+        from nexus_launcher.creator_page_contract import validate_page_draft,validate_page_content
+        account=profile.user_id
+        token=self.support_session(account)
+        if not account or not token:
+            raise SessionRejected('Аккаунт изменён. Обновите профиль и войдите заново.')
+        payload=None
+        if operation is not None:
+            if not isinstance(operation,dict) or set(operation)-{'id','revision','action','content','rightsConfirmed'}:
+                raise ValueError('Некорректная операция заявки')
+            action=operation.get('action')
+            if action not in ('create','save','submit','reopen') or type(operation.get('revision')) is not int or operation['revision']<0 or not isinstance(operation.get('id'),str) or not re.fullmatch(r'[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}',operation['id']):
+                raise ValueError('Некорректная версия или ID заявки')
+            if action in ('create','save'):validate_page_content(operation.get('content'))
+            elif 'content' in operation:raise ValueError('Недопустимое изменение содержания')
+            if action=='submit' and operation.get('rightsConfirmed') is not True:raise ValueError('Подтвердите права на материалы')
+            payload=dict(operation,accountId=account)
+            if len(json.dumps(payload,ensure_ascii=False).encode('utf-8'))>24000:
+                raise ValueError('Общий размер заявки превышает 24 КБ. Сократите тексты.')
+        result,_=self._request('/api/launcher/creator-pages',method='POST' if payload else 'GET',payload=payload,token=token)
+        if self.support_session(account)!=token:
+            raise SessionRejected('Аккаунт изменён. Проверьте сохранённые данные после входа.')
+        if not isinstance(result,dict) or result.get('accountId')!=account:
+            raise ProtocolError('Сервис вернул данные другого аккаунта.')
+        try:
+            if payload:
+                item=validate_page_draft(result.get('item'))
+                if item['id']!=payload['id']:raise ValueError('ID changed')
+                expected='SUBMITTED' if payload['action']=='submit' else 'DRAFT'
+                revision=1 if payload['action']=='create' else payload['revision']+1
+                if item['state']!=expected or item['revision']!=revision:raise ValueError('Version changed')
+                if 'content' in payload and item['content']!=payload['content']:raise ValueError('Content changed')
+                return item
+            items=result.get('items')
+            if not isinstance(items,list) or len(items)>10:raise ValueError('Invalid items')
+            items=[validate_page_draft(v) for v in items]
+            if len({v['id'] for v in items})!=len(items):raise ValueError('Duplicate ID')
+            return items
+        except ValueError as error:
+            raise ProtocolError('Некорректный ответ кабинета создателя. Проверьте сохранённые данные.') from error
+
     def game_ticket(self) -> str:
         token = self._token()
         if not token:
@@ -335,6 +386,9 @@ class NexusAccountClient:
         completed = user.get("profileCompleted", bool(minecraft_nick))
         if not isinstance(user_id, str) or not isinstance(completed, bool) or completed != bool(minecraft_nick):
             raise ProtocolError("Некорректное состояние профиля.")
+        experience_role = user.get('experienceRole')
+        if experience_role not in (None, 'player', 'server_creator', 'content_maker'):
+            raise ProtocolError('Некорректная роль интересов профиля.')
         self._support_identity = (user_id, token)
         return NexusProfile(
             minecraft_nick,
@@ -348,4 +402,5 @@ class NexusAccountClient:
             user.get("tester") is True,
             user_id,
             completed,
+            experience_role,
         )

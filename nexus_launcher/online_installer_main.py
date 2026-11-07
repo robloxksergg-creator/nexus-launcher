@@ -19,7 +19,7 @@ def main():
  from nexus_launcher.nexus_platform.presentation_style import stylesheet
  from nexus_launcher.nexus_platform.theme_tokens import TOKENS
  from nexus_launcher.github_updates import GitHubPackageTransport
- from nexus_launcher.public_update_identity import FEED
+ from nexus_launcher.public_update_identity import FEED,CHANNEL
  from nexus_launcher.windows_bootstrap_process import WindowsLaunchLease
  from nexus_launcher.connection_diagnostics import transport_failure
  import json
@@ -51,9 +51,9 @@ def main():
  class Window(NexusDialog):
   def __init__(self):
    super().__init__();self.worker=None;self.target=None;self.details=None;self.completion=None;self.shortcut_created=False;self.needs_permissions=False;self.permission_request=None
-   self.setWindowTitle('Установка NEXUS Launcher');self.setMinimumWidth(520);self.setStyleSheet(stylesheet()+f"QDialog {{ background:{TOKENS['background']}; }}")
+   self.setWindowTitle('Установка NEXUS Testers' if CHANNEL=='beta' else 'Установка NEXUS Launcher');self.setMinimumWidth(520);self.setStyleSheet(stylesheet()+f"QDialog {{ background:{TOKENS['background']}; }}")
    box=QVBoxLayout(self);box.setContentsMargins(28,24,28,24);box.setSpacing(16)
-   title=QLabel('NEXUS Launcher');title.setStyleSheet('font-size:28px;font-weight:700');box.addWidget(title)
+   title=QLabel('NEXUS Testers · Beta' if CHANNEL=='beta' else 'NEXUS Launcher');title.setStyleSheet('font-size:28px;font-weight:700');box.addWidget(title)
    info=QLabel('Выберите папку. По умолчанию — рядом с установщиком. Для защищённой папки предложим запрос Windows на её создание. Скачивание и запуск лаунчера выполняются без повышения прав.');info.setWordWrap(True);box.addWidget(info)
    box.addWidget(QLabel('Папка установки и данных сборок'))
    from nexus_launcher.installer_location import default_directory

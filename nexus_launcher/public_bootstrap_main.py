@@ -25,7 +25,8 @@ def main(*, installation_root=None):
     resources = Path(sys._MEIPASS)
     # A new directory and trust chain; no automatic copying/deleting old saves.
     root = (Path(installation_root).absolute() if installation_root is not None else
-            Path(os.environ['LOCALAPPDATA']) / 'NEXUS Launcher' / 'managed-preview')
+            Path(os.environ['LOCALAPPDATA']) / 'NEXUS Launcher' /
+            ('managed-testers' if identity.CHANNEL == 'beta' else 'managed-preview'))
     app = QApplication(sys.argv)
     app.setApplicationName('NEXUS Launcher')
     app.setWindowIcon(QIcon(str(resources / 'assets' / 'icon.ico')))

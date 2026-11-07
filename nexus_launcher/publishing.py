@@ -165,6 +165,9 @@ def validate_metadata(metadata: dict, *, allow_trust=False) -> dict:
         if value and not value.startswith("https://"):
             raise ValueError(key + " must use HTTPS")
         result[key] = value
+    if "releasePlan" in metadata:
+        from nexus_launcher.creator_release_plan import validate_release_plan
+        result["releasePlan"] = validate_release_plan(metadata["releasePlan"])
     return result
 
 
@@ -375,6 +378,7 @@ class PublishingService:
             "tags": fields.get("tags", ""), "language": fields.get("language") or "ru",
             "slug": fields.get("slug") or safe_slug(project["name"], project_id),
             "channel": project.get("channel", "dev"), "visibility": fields.get("visibility") or "private",
+            **({"releasePlan": project["releasePlan"]} if "releasePlan" in project else {}),
             **{key: fields.get(key, "") for key in ("website", "discord", "telegram", "support")},
         })
         revision = self.repository.next_revision(project_id)

@@ -18,7 +18,7 @@ from .prototype_host import PrototypeHost, PrototypePage, same_origin
 ACTIONS = frozenset({"support", "leave", "library", "settings", "downloads", "logs", "studio", "academy",
                      "create", "open-build", "play-build", "select-server", "play-server",
                      "save-server", "pin-server", "server-tools", "check-server", "login", "register",
-                     "logout", "refresh-profile", "edit-profile", "fullscreen", "refresh", "stop-game"})
+                     "logout", "refresh-profile", "edit-profile", "fullscreen", "refresh", "stop-game", "community-catalogue"})
 IDENTIFIER = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
@@ -171,6 +171,7 @@ class DesignHost(PrototypeHost):
                  "builds": self._builds, "libraryError": self._library_error,
                  "profile": {"nickname": (profile.display_name or profile.minecraft_nick) if profile else None,
                              "username": profile.username if profile else None,
+                             "experienceRole": getattr(profile, "experience_role", None) if profile else None,
                              "pendingNickname": getattr(self.services, "registration_nickname", "") if not profile else "",
                              "demo": bool(getattr(self.services, "registration_demo", False)),
                              "busy": not self.services.profile.isEnabled()},
@@ -195,6 +196,10 @@ class DesignHost(PrototypeHost):
         return None
 
     def _action(self, name, identifier):
+        if name == 'community-catalogue':
+            if self._navigation_allowed(self.services._current_page):
+                self.services._show_community_catalogue()
+            return
         if name == "check-server":
             if not self._navigation_allowed(self.services._current_page):
                 return

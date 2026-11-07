@@ -889,6 +889,14 @@ class SettingsPage(QWidget):
         copy_path.clicked.connect(lambda: QApplication.clipboard().setText(str(self.data_root)))
         self.logs_values.layout().addWidget(logs_button)
         self.logs_values.layout().addWidget(copy_path)
+        self.automatic_error_reports = QCheckBox('Автоотчёты об ошибках в поддержку NEXUS')
+        self.automatic_error_reports.setChecked(config.get('automaticErrorReports') is True)
+        self.automatic_error_reports.toggled.connect(lambda enabled: self.settings_changed.emit({'automaticErrorReports': enabled}))
+        self.logs_values.layout().addWidget(self.automatic_error_reports)
+        report_notice = QLabel('Только код ошибки, версия и платформа, после входа. Без логов, паролей и путей. До 3 разных отчётов в час. Сохранение в поддержке не подтверждает доставку ботом.')
+        report_notice.setWordWrap(True)
+        report_notice.setObjectName('muted')
+        self.logs_values.layout().addWidget(report_notice)
         for panel in (
             self.general_values, self.game_values, self.java_values, self.storage_values,
             self.download_values, self.appearance_values, self.network_values, self.logs_values, self.about_values, self.advanced_values,
@@ -934,6 +942,9 @@ class SettingsPage(QWidget):
 
     def set_config(self, config: dict, java_label: str, version: str = "") -> None:
         self.config = config
+        self.automatic_error_reports.blockSignals(True)
+        self.automatic_error_reports.setChecked(config.get('automaticErrorReports') is True)
+        self.automatic_error_reports.blockSignals(False)
         behavior = str(config.get("launcherAfterLaunch", "keep_open"))
         behavior_text = {"keep_open": "Оставлять лаунчер открытым", "minimize": "Сворачивать после запуска", "close": "Закрывать после запуска"}.get(behavior, behavior)
         self._set_lines(self.general_values, [("Язык", "Русский"), ("После запуска игры", behavior_text)])

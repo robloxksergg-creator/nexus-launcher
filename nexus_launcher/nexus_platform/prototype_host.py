@@ -55,7 +55,7 @@ class AssetServer:
             }
             self.assets["/nexus-mark.svg"] = (resource("nexus-mark.svg").read_bytes(), "image/svg+xml")
             for name in ("gearmorph-official.png", "minecraft-meadow.png",
-                         "minecraft-desert.png", "minecraft-city.png", "minecraft-mountain.png"):
+                         "minecraft-desert.png", "minecraft-city.png", "minecraft-mountain.png", "creator-role.png"):
                 self.assets["/" + name] = (resource(name).read_bytes(), "image/png")
             self._start_server()
             return
