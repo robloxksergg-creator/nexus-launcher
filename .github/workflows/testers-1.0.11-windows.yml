@@ -2,7 +2,7 @@ name: NEXUS 1.0.11 tester candidate - windows
 'on':
   workflow_dispatch:
   push:
-    branches: [testers/verify-1.0.11]
+    branches: [testers/verify-1.0.11, testers/verify-1.0.11-r3]
 permissions:
   contents: read
 jobs:

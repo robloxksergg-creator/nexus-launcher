@@ -3,7 +3,7 @@ import threading
 from copy import deepcopy
 from PySide6.QtCore import Signal,Qt,QUrl,QDateTime
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import QDialog,QVBoxLayout,QHBoxLayout,QGridLayout,QLabel,QPushButton,QScrollArea,QWidget,QLineEdit,QPlainTextEdit,QCheckBox,QMessageBox,QComboBox,QFrame,QTabWidget
+from PySide6.QtWidgets import QDialog,QVBoxLayout,QHBoxLayout,QGridLayout,QLabel,QPushButton,QScrollArea,QWidget,QLineEdit,QPlainTextEdit,QCheckBox,QMessageBox,QComboBox,QFrame,QTabWidget,QSizePolicy
 from nexus_launcher.creator_page_contract import PAGE_LIMITS,page_from_project,validate_page_content
 from nexus_launcher.creator_page_workspace import CreatorPageWorkspace
 from nexus_launcher.nexus_account import SessionRejected
@@ -81,10 +81,14 @@ class CreatorPageDialog(QDialog):
         body=QHBoxLayout()
         body.setSpacing(24)
         self.editor=QWidget()
+        # The form already scrolls. Native style/font minimum hints must not
+        # force the whole dialog taller than a compact desktop's work area.
+        self.editor.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Ignored)
         self.editor.setObjectName('creatorEditor')
         editor_layout=QVBoxLayout(self.editor)
         editor_layout.setContentsMargins(0,0,0,0)
         self.tabs=QTabWidget()
+        self.tabs.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Ignored)
         self.tabs.setDocumentMode(True)
         self.tabs.setAccessibleName('Разделы заявки')
         editor_layout.addWidget(self.tabs)

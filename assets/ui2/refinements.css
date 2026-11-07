@@ -23,3 +23,5 @@ html{scrollbar-color:var(--border) transparent;scrollbar-width:thin}
 .profile-main{min-width:0;display:flex;flex-direction:column;gap:32px}
 
 *{scrollbar-width:none!important;scrollbar-gutter:auto!important}*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+
+.experience-badge{display:inline-flex;align-items:center;gap:8px;font-size:12px;line-height:1.5;padding:6px 10px;border:1px solid var(--border,#294354);border-radius:8px;margin:8px 0}.experience-badge img{object-fit:contain;image-rendering:pixelated;flex-shrink:0}
