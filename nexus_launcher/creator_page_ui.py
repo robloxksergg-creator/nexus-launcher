@@ -3,7 +3,7 @@ import threading
 from copy import deepcopy
 from PySide6.QtCore import Signal,Qt,QUrl,QDateTime
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import QDialog,QVBoxLayout,QHBoxLayout,QGridLayout,QLabel,QPushButton,QScrollArea,QWidget,QLineEdit,QPlainTextEdit,QCheckBox,QMessageBox,QComboBox,QFrame,QTabWidget,QSizePolicy
+from PySide6.QtWidgets import QDialog,QVBoxLayout,QHBoxLayout,QGridLayout,QLabel,QPushButton,QScrollArea,QWidget,QLineEdit,QPlainTextEdit,QCheckBox,QMessageBox,QComboBox,QFrame,QTabWidget,QSizePolicy,QLayout
 from nexus_launcher.creator_page_contract import PAGE_LIMITS,page_from_project,validate_page_content
 from nexus_launcher.creator_page_workspace import CreatorPageWorkspace
 from nexus_launcher.nexus_account import SessionRejected
@@ -33,6 +33,9 @@ class CreatorPageDialog(QDialog):
         self.resize(1160,860)
         self.setMinimumSize(780,680)
         root=QVBoxLayout(self)
+        # Keep the explicit compact minimum. QDialog's default layout constraint
+        # can otherwise retain a larger native size hint after the rail hides.
+        root.setSizeConstraint(QLayout.SetNoConstraint)
         root.setContentsMargins(28,24,28,24)
         root.setSpacing(12)
         heading=QHBoxLayout()

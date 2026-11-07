@@ -35,6 +35,10 @@ jobs:
           "RUSTUP_TOOLCHAIN=1.99.1-x86_64-pc-windows-msvc" >> $env:GITHUB_ENV
           "CARGO_TARGET_DIR=$env:RUNNER_TEMP\nexus-target" >> $env:GITHUB_ENV
           "PYO3_PYTHON=$(python -c 'import sys; print(sys.executable)')" >> $env:GITHUB_ENV
+      - name: Verify compact creator editor before native build
+        run: |
+          python -B -m pytest tests/test_creator_page_native.py -q -p no:cacheprovider
+          exit $LASTEXITCODE
       - name: Build Rust extension from this checkout
         run: |
           cargo test --locked -p nexus-core -p nexus-transport
