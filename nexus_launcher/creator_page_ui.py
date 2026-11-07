@@ -201,6 +201,13 @@ class CreatorPageDialog(QDialog):
         self.finished_operation.connect(self.complete)
         self.existing.currentIndexChanged.connect(lambda:self.controls())
         for button in self.findChildren(QPushButton):button.setAutoDefault(False)
+        # Install the shared 36px title bar before fixing the TOTAL window
+        # bounds. Lazy native-style polish otherwise adds it to our minimum
+        # later, making a 680px window impossible (716px minimum).
+        from nexus_launcher.nexus_platform.dialog_chrome import watch_dialog
+        watch_dialog(self)
+        self.setMinimumSize(780,680)
+        self.resize(1160,860)
         self.run('load',self.workspace.load)
 
     def resizeEvent(self,event):

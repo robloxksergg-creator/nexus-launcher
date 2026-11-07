@@ -105,6 +105,8 @@ def test_editor_tabs_keep_edits_and_primary_actions_fit_compact_windows(tmp_path
     from PySide6.QtCore import Qt,QPoint
     from PySide6.QtTest import QTest
     app=QApplication.instance() or QApplication([])
+    from nexus_launcher.nexus_platform.native_style import install_native_style
+    install_native_style(app)
     service,instance=fixture(tmp_path);remote=Remote()
     dialog=CreatorPageDialog(remote,PROFILE,service,instance.id)
     try:
@@ -121,6 +123,7 @@ def test_editor_tabs_keep_edits_and_primary_actions_fit_compact_windows(tmp_path
             # native coverage still checks the real viewport and every action.
             if app.platformName()=='offscreen':
                 assert dialog.width()==width and dialog.height()==height
+            assert dialog._nexus_dialog_chrome and dialog.title_bar.isVisible()
             assert dialog.minimumWidth()==780 and dialog.minimumHeight()==680
             assert dialog.width()>=780 and dialog.height()>=680
             assert dialog.rail_scroll.isVisible()==(dialog.width()>=1040 and dialog.height()>=780)
