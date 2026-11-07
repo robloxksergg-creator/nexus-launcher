@@ -30,7 +30,7 @@ def fixture(allow=True, identifier='valid'):
     services=NS(_current_page='home', config={'creatorMode':True},account_profile=NS(),game_process=None,
                 play=NS(isEnabled=lambda:True),world_views=[NS(id='valid',server=NS())])
     for name in ('_toggle_pin','select_server','_save_world','_play','_login_account','_register_account',
-                 '_logout_account','_refresh_account','_open_web_profile','_stop_game','_check_before_install'):
+                 '_logout_account','_refresh_account','_open_web_profile','_stop_game','_check_before_install','_show_community_catalogue'):
         setattr(services,name,spy(name))
     services.studio_page=NS(open_creator=spy('academy'))
     services.instances_page=NS(_create=spy('create'),_open_card=spy('open'),_launch=spy('launch'))
@@ -88,7 +88,7 @@ class ActionTests(unittest.TestCase):
             namespace['_action'](host,action,'foreign-resource')
             self.assertFalse(set(calls)&{'launch','open','_play','_save_world','_toggle_pin','menu','select_server'})
     def test_navigation_refusal_blocks_launch_and_create(self):
-        for action in ('play-build','play-server','create','library','settings','academy'):
+        for action in ('play-build','play-server','create','library','settings','academy','community-catalogue'):
             host,calls=fixture(False)
             namespace['_action'](host,action,'valid')
             self.assertEqual(calls,[])
