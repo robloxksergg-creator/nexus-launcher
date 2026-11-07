@@ -36,6 +36,8 @@ jobs:
           "CARGO_TARGET_DIR=$env:RUNNER_TEMP\nexus-target" >> $env:GITHUB_ENV
           "PYO3_PYTHON=$(python -c 'import sys; print(sys.executable)')" >> $env:GITHUB_ENV
       - name: Verify compact creator editor before native build
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
           python -B -m pytest tests/test_creator_page_native.py -q -p no:cacheprovider
           exit $LASTEXITCODE

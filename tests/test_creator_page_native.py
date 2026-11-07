@@ -115,9 +115,15 @@ def test_editor_tabs_keep_edits_and_primary_actions_fit_compact_windows(tmp_path
         dialog.tabs.setCurrentIndex(3);dialog.tabs.setCurrentIndex(0)
         assert dialog.fields['summary'].text()=='Unsaved text must survive tab changes' and dialog.dirty
         for width,height in [(1160,860),(820,760),(780,680)]:
-            dialog.resize(width,height);app.processEvents()
-            assert dialog.width()==width and dialog.height()==height
-            assert dialog.rail_scroll.isVisible()==(width>=1040 and height>=780)
+            dialog.resize(width,height);app.processEvents();QTest.qWait(80)
+            # A native window manager may clamp a requested window to its work
+            # area. Exact pixel sizes are deterministic only in offscreen Qt;
+            # native coverage still checks the real viewport and every action.
+            if app.platformName()=='offscreen':
+                assert dialog.width()==width and dialog.height()==height
+            assert dialog.minimumWidth()==780 and dialog.minimumHeight()==680
+            assert dialog.width()>=780 and dialog.height()>=680
+            assert dialog.rail_scroll.isVisible()==(dialog.width()>=1040 and dialog.height()>=780)
             for button in (dialog.save,dialog.submit):
                 origin=button.mapTo(dialog,QPoint(0,0))
                 assert origin.x()>=0 and origin.y()>=0
