@@ -1,0 +1,123 @@
+name: Activate accepted NEXUS Testers 1.0.12 only
+'on':
+  push:
+    branches: [testers/publish-1.0.12]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: nexus-publish-testers-1.0.12
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: robloxksergg-creator/nexus-launcher
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          set-safe-directory: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Validate immutable accepted runs and artifacts
+        run: |
+          python - <<'PY'
+          import json,os,urllib.request
+          base='https://api.github.com/repos/'+os.environ['GH_REPO']
+          def get(path):
+            q=urllib.request.Request(base+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN']})
+            with urllib.request.urlopen(q,timeout=30) as r:return json.load(r)
+          rows=[(42475832865,13615916694,'9c4367a8474f3e068063bb98947784541572accc61f41845dc25f19211065eb2','bc9d5a65d5792a9fce434b0d2fdabecbae5d966b'),(42421462875,13593193381,'c9184709d4019a3ad0a9d1f1822c5d04210b460e9e98617f284d5ef34a522923','57ac4d4627a7f709444b0f651ac917ef8acac909'),(42477565294,13615513953,'50680e9afcb372ded264f452d3394d053695573cce20cd7a7fb23255c6b87ae9','480349cd450fa1a98079fc88e5c4d3ccc9fe1135')]
+          for run,artifact,sha,commit in rows:
+            r=get('/actions/runs/'+str(run));a=get('/actions/artifacts/'+str(artifact))
+            assert r['status']=='completed' and r['conclusion']=='success' and r['head_sha']==commit
+            assert not a['expired'] and a['workflow_run']['id']==run and a['digest']=='sha256:'+sha
+          print('Pinned build, installer and native acceptance provenance PASS')
+          PY
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '13615916694'
+          run-id: 42475832865
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/inputs/managed
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '13593193381'
+          run-id: 42421462875
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/inputs/installer
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '13615513953'
+          run-id: 42477565294
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/inputs/acceptance
+      - name: Reconstruct and verify the owner-signed beta package
+        run: |
+          python -m pip install --disable-pip-version-check cryptography==50.0.1
+          python -B packaging/prepare_public_variant.py --source . --destination "$RUNNER_TEMP/verification-source" --version 1.0.12 --audience testers
+          export PYTHONPATH="$RUNNER_TEMP/verification-source"
+          python -B packaging/prepare_tester_publication.py --inputs "$RUNNER_TEMP/inputs" --output "$RUNNER_TEMP/release" --approval packaging/tester-1.0.12/update-approval.json --instructions packaging/tester-1.0.12/TESTER-INSTRUCTIONS.md --notes packaging/tester-1.0.12/RELEASE-NOTES.md
+      - name: Guard the existing common Windows Linux and macOS feeds
+        run: |
+          mkdir "$RUNNER_TEMP/stable-before"
+          gh release download updates-preview --pattern '*envelope*.json' --dir "$RUNNER_TEMP/stable-before"
+          python - <<'PY'
+          import pathlib,hashlib,os
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'stable-before'
+          expected={'portable-envelope.json':'6ff8dbe0a9d3f44715340f304a6d8a868c3d9e677817685d19682b9309bb0518','posix-envelope-linux-x64.json':'7ab4e7f985e780c600ebc56a2dd8d56b9ad4fa3c27d1aa8409d98f2adeba4f4f','posix-envelope-macos-arm64.json':'ff71c79f4fe04eb6cd616cb2c66dc3034870655f07b91ffec084e793d2a30710'}
+          for name,sha in expected.items():assert hashlib.sha256((root/name).read_bytes()).hexdigest()==sha,'Common feed changed; stop'
+          PY
+          if gh release view v1.0.12-testers.1 >/dev/null 2>&1; then echo 'Tester release already exists; refusing overwrite'; exit 1; fi
+          if gh release view updates-testers >/dev/null 2>&1; then echo 'Tester feed already exists; refusing overwrite'; exit 1; fi
+      - name: Publish only the separate tester prerelease
+        run: |
+          gh release create v1.0.12-testers.1 --target bc9d5a65d5792a9fce434b0d2fdabecbae5d966b --title 'NEXUS Testers 1.0.12 - Windows beta' --notes-file "$RUNNER_TEMP/release/RELEASE-NOTES.md" --draft --prerelease "$RUNNER_TEMP/release/"*
+          gh release edit v1.0.12-testers.1 --draft=false --prerelease --latest=false
+      - name: Verify anonymous tester asset download bytes before activating beta feed
+        run: |
+          python - <<'PY'
+          import json,os,pathlib,hashlib,urllib.request
+          url='https://api.github.com/repos/'+os.environ['GH_REPO']+'/releases/tags/v1.0.12-testers.1'
+          with urllib.request.urlopen(urllib.request.Request(url,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN']}),timeout=30) as r:data=json.load(r)
+          assert data['prerelease'] and not data['draft']
+          assets={a['name']:a for a in data['assets']}
+          for p in (pathlib.Path(os.environ['RUNNER_TEMP'])/'release').iterdir():
+            with p.open('rb') as f:sha=hashlib.file_digest(f,'sha256').hexdigest()
+            assert assets[p.name]['digest']=='sha256:'+sha and assets[p.name]['size']==p.stat().st_size,p.name
+          PY
+          mkdir "$RUNNER_TEMP/public-probes"
+          for name in NEXUS-Testers-Setup.exe NEXUS-Managed-1.0.12-Windows-x64.zip portable-envelope.json; do
+            curl --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 15 --max-time 180 "https://github.com/$GH_REPO/releases/download/v1.0.12-testers.1/$name" --output "$RUNNER_TEMP/public-probes/$name"
+            cmp "$RUNNER_TEMP/public-probes/$name" "$RUNNER_TEMP/release/$name"
+          done
+      - name: Activate only the new beta feed
+        run: |
+          gh release create updates-testers --target bc9d5a65d5792a9fce434b0d2fdabecbae5d966b --title 'NEXUS Testers update feed - Windows beta' --notes 'Separate tester channel. Not used by the common launcher update channel.' --draft --prerelease "$RUNNER_TEMP/release/portable-envelope.json"
+          gh release edit updates-testers --draft=false --prerelease --latest=false
+      - name: Verify the beta feed and byte-for-byte unchanged common feeds
+        run: |
+          curl --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 15 --max-time 90 "https://github.com/$GH_REPO/releases/download/updates-testers/portable-envelope.json" --output "$RUNNER_TEMP/public-probes/beta-active.json"
+          cmp "$RUNNER_TEMP/public-probes/beta-active.json" "$RUNNER_TEMP/release/portable-envelope.json"
+          mkdir "$RUNNER_TEMP/stable-after"
+          gh release download updates-preview --pattern '*envelope*.json' --dir "$RUNNER_TEMP/stable-after"
+          for source in "$RUNNER_TEMP/stable-before/"*; do cmp "$source" "$RUNNER_TEMP/stable-after/$(basename "$source")"; done
+          echo 'Tester feed active; common Windows/Linux/macOS feed bytes unchanged'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: nexus-testers-1.0.12-publication-receipts
+          retention-days: 5
+          path: |
+            ${{ runner.temp }}/stable-before/*.json
+            ${{ runner.temp }}/stable-after/*.json
+            ${{ runner.temp }}/release/SHA256SUMS.txt
+            ${{ runner.temp }}/release/VERIFICATION.json
