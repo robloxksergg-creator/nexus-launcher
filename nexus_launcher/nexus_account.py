@@ -82,6 +82,13 @@ class NexusAccountClient:
         self.strict_restore = strict_restore
         self._support_identity = None
         self.keyring_service = KEYRING_SERVICE + (" / staging" if selected_origin == staging_origin else "")
+        if build_channel.PUBLIC_PREVIEW_BUILD:
+            from nexus_launcher.public_update_identity import CHANNEL
+            if CHANNEL == 'beta':
+                # Parallel tester installs must not overwrite a stable login.
+                # Device identity deliberately stays shared: this is the same
+                # physical device, not a registration/provisioning bypass.
+                self.keyring_service += ' / tester-updates'
 
     def _device_id(self) -> str:
         if os.name == "nt" and os.environ.get("LOCALAPPDATA"):

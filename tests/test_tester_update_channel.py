@@ -47,3 +47,16 @@ def test_correct_signature_cannot_cross_update_channels(monkeypatch, installed, 
 def test_tester_default_install_directory_is_separate(monkeypatch, tmp_path):
     monkeypatch.setattr(public_update_identity, 'CHANNEL', 'beta')
     assert default_directory(tmp_path/'Setup.exe') == tmp_path/'NEXUS Testers'
+
+
+def test_tester_sessions_are_separate_without_reading_or_migrating_stable_tokens(monkeypatch):
+    import nexus_launcher.build_channel as channel
+    from nexus_launcher.nexus_account import NexusAccountClient
+    monkeypatch.setattr(channel, 'PUBLIC_PREVIEW_BUILD', True)
+    monkeypatch.setattr(channel, 'STAGING_BUILD', False)
+    monkeypatch.setattr(public_update_identity, 'CHANNEL', 'stable')
+    stable = NexusAccountClient()
+    monkeypatch.setattr(public_update_identity, 'CHANNEL', 'beta')
+    beta = NexusAccountClient()
+    assert beta.keyring_service == stable.keyring_service + ' / tester-updates'
+    assert beta.base_url == stable.base_url
