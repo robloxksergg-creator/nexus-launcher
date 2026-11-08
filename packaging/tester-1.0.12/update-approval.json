@@ -1,0 +1,20 @@
+{
+  "schema": 2,
+  "key_id": "nexus-public-preview-20261029",
+  "signature": "b+2PMpqmP1bNurcqSVIWBU3GMHcn72ItXhbgCw2smPbHB2BvBVHhhgNa+aG/0RDR8kdrUFrRVuW/D9awEg3GCg==",
+  "release": {
+    "format": "nexus-portable-zip-v1",
+    "version": "1.0.12",
+    "entrypoint": "NEXUS Managed Launcher.exe",
+    "channel": "beta",
+    "available": true,
+    "platform": "windows",
+    "arch": "x64",
+    "published_at": "2026-11-08T11:42:57.008488+00:00",
+    "expires_at": "2026-12-08T11:43:57.008488+00:00",
+    "url": "https://github.com/robloxksergg-creator/nexus-launcher/releases/download/v1.0.12-testers.1/NEXUS-Managed-1.0.12-Windows-x64.zip",
+    "size": 221667077,
+    "sha256": "f52bb7df3cdc24edfd094034ff2f835edad0b68db187d8b0992d8df01ffdc940"
+  },
+  "canonical_sha256": "1708fbe9b2640537e8a506bb43170a81a006adc5dc28175b3e0d0529ccb26fd3"
+}

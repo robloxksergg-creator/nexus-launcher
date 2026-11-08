@@ -1,0 +1,80 @@
+name: Verify signed tester 1.0.11 to 1.0.12 update
+'on':
+  push:
+    branches: [testers/acceptance-1.0.12]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  acceptance:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          set-safe-directory: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Install pinned verification dependencies
+        run: python -m pip install --disable-pip-version-check cryptography==50.0.1 PySide6==6.8.3
+      - name: Verify immutable build and artifact provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @'
+          import json,os,urllib.request
+          base='https://api.github.com/repos/robloxksergg-creator/nexus-launcher'
+          def get(path):
+            q=urllib.request.Request(base+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN']})
+            with urllib.request.urlopen(q,timeout=30) as r:return json.load(r)
+          rows=[(42423819819,13594857954,'3bd8c2cc900befa5d3e18fb979093755abba3cccd48fdf0952d23d8d13d55999','aed610a65f3e69ede2bb9eb07b6634e9d3060961'),(42475832865,13615916694,'9c4367a8474f3e068063bb98947784541572accc61f41845dc25f19211065eb2','bc9d5a65d5792a9fce434b0d2fdabecbae5d966b'),(42421462875,13593193381,'c9184709d4019a3ad0a9d1f1822c5d04210b460e9e98617f284d5ef34a522923','57ac4d4627a7f709444b0f651ac917ef8acac909')]
+          for run,artifact,sha,commit in rows:
+            r=get('/actions/runs/'+str(run));a=get('/actions/artifacts/'+str(artifact))
+            assert r['status']=='completed' and r['conclusion']=='success' and r['head_sha']==commit
+            assert not a['expired'] and a['workflow_run']['id']==run and a['digest']=='sha256:'+sha
+          print('Build provenance PASS; no signing key loaded')
+          '@ | python -
+          exit $LASTEXITCODE
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '13594857954'
+          run-id: 42423819819
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/baseline
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '13615916694'
+          run-id: 42475832865
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/update
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '13593193381'
+          run-id: 42421462875
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/installer
+      - name: Verify signed full install and native two-version slot transition
+        run: |
+          python -B packaging/prepare_public_variant.py --source . --destination "$env:RUNNER_TEMP\harness-source" --version 1.0.12 --audience testers
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:PYTHONPATH = "$env:RUNNER_TEMP\harness-source"
+          python -B packaging/verify_tester_windows.py --initial "$env:RUNNER_TEMP\baseline\NEXUS-Managed-1.0.11-Windows-x64.zip" --update "$env:RUNNER_TEMP\update\NEXUS-Managed-1.0.12-Windows-x64.zip" --installer "$env:RUNNER_TEMP\installer\NEXUS-Setup.exe" --approvals packaging/tester-1.0.12 --output "$env:RUNNER_TEMP\acceptance" --root "$env:SystemDrive\nx-tester-112-ci" --installer-sha ca47d34d2855d8d6036a6f86177c8b892c5406c591c2388278fed47f763d7f86
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: nexus-testers-1.0.12-acceptance
+          retention-days: 5
+          path: |
+            ${{ runner.temp }}/acceptance/*.json
