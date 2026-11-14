@@ -11,7 +11,7 @@ from nexus_launcher.nexus_platform.catalog_provider import CatalogProvider
 from nexus_launcher.nexus_platform.mod_catalog import ModCatalog
 
 
-INSTANCE = SimpleNamespace(id='fixture', name='Моя сборка', minecraft_version='1.21.1', loader='fabric')
+INSTANCE = SimpleNamespace(id='fixture', name='Моя сборка', minecraft_version='1.21.1', loader='fabric', installed_mods=[])
 TAGS = {'versions': ['1.21.1', '1.21.4'], 'loaders': ['fabric', 'neoforge'],
         'categories': ['optimization', 'adventure']}
 
@@ -202,7 +202,7 @@ def test_stale_cancelled_response_and_same_instance_restore(catalog):
     widget.open_for(INSTANCE)
     assert widget.query.text() == 'sodium'
     assert widget.filter_state.categories == ('optimization',)
-    other = SimpleNamespace(id='other', name='Другая', minecraft_version='1.20.1', loader='forge')
+    other = SimpleNamespace(id='other', name='Другая', minecraft_version='1.20.1', loader='forge', installed_mods=[])
     widget.open_for(other)
     assert widget.filter_state == State.for_instance(other) and widget.query.text() == ''
     widget.open_for(INSTANCE)

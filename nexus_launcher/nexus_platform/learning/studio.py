@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineSettings
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QWidget, QVBoxLayout
+from shiboken6 import isValid
 
 from nexus_launcher.modern_main import resource
 from nexus_launcher.nexus_platform.prototype_host import AssetServer, ResourcePolicy, same_origin
@@ -37,6 +38,9 @@ class LearningPage(QWebEnginePage):
         self.script_errors = []
 
     def javaScriptConsoleMessage(self, level, message, line_number, source_id):
+        # Chromium can deliver a queued message after the native page is deleted.
+        if not isValid(self):
+            return
         if level == QWebEnginePage.JavaScriptConsoleMessageLevel.ErrorMessageLevel:
             self.script_errors.append({'message': message, 'line': line_number})
         if message.startswith('NEXUS_CREATOR_EVENT:') and len(message) < 250000 and same_origin(source_id, self.origin):

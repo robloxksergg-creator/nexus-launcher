@@ -49,9 +49,12 @@ def test_zoom_dock_focus_and_compact_layout_preserve_document(tmp_path):
         assert .48 < smaller/width < .52
         assert js(app, workspace.page, "document.querySelector('.creator-zoom-value').textContent") == '50%'
         assert workspace.adapter.snapshot() == before
+        dock_width = js(app, workspace.page, "document.querySelector('.creator-dock').getBoundingClientRect().width")
         js(app, workspace.page, "document.querySelector('.creator-dock-grip').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}))")
-        assert js(app, workspace.page, "document.querySelector('.creator-dock-grip').getAttribute('aria-valuenow')") == '320'
-        assert js(app, workspace.page, "document.querySelector('.creator-dock').getBoundingClientRect().width") == 320
+        # Responsive breakpoints can start at 270 rather than 310 pixels.
+        expected_width = min(430, round(dock_width) + 10)
+        assert js(app, workspace.page, "document.querySelector('.creator-dock-grip').getAttribute('aria-valuenow')") == str(expected_width)
+        assert js(app, workspace.page, "document.querySelector('.creator-dock').getBoundingClientRect().width") == expected_width
         js(app, workspace.page, "[...document.querySelectorAll('.creator-zoom-tools button')].find(b=>b.textContent==='Только холст').click()")
         assert js(app, workspace.page, "getComputedStyle(document.querySelector('.creator-dock')).display") == 'none'
         js(app, workspace.page, "[...document.querySelectorAll('.creator-zoom-tools button')].find(b=>b.textContent==='Сброс').click()")

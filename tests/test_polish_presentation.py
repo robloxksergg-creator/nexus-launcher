@@ -135,7 +135,16 @@ def test_menu_adapter_keeps_all_original_actions(candidate):  # noqa: F811
         menu = next(child for child in page.findChildren(QMenu) if child.isVisible())
         original = [(action.text(), action) for action in menu.actions() if not action.isSeparator()]
         polish_menu(menu)
-        assert len(original) == 10
+        assert {text for text, _ in original} == {
+            'Что мешает запуску?', 'Открыть папку сборки', 'Переименовать',
+            'Дублировать', 'Экспортировать ZIP', 'Изменить Minecraft / загрузчик…',
+            'Резервные копии', 'Убрать из библиотеки · сохранить файлы', 'Удалить файлы сборки…',
+        }
+        backups = next(action.menu() for text, action in original if text == 'Резервные копии')
+        assert {action.text() for action in backups.actions()} == {
+            'Создать резервную копию', 'Восстановить как новую сборку…',
+            'Открыть папку копий', 'Удалить резервную копию…',
+        }
         assert [(action.text(), action) for action in menu.actions() if not action.isSeparator()] == original
         captures = os.environ.get('NEXUS_UI2_CAPTURE_DIR')
         if captures:
@@ -145,7 +154,7 @@ def test_menu_adapter_keeps_all_original_actions(candidate):  # noqa: F811
     QTimer.singleShot(50, inspect)
     page._open_context_menu()
     app.processEvents()
-    assert len(captured) == 10
+    assert len(captured) == 9
 
 
 def test_native_workspaces_at_all_review_sizes(candidate, monkeypatch):  # noqa: F811
