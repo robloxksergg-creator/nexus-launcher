@@ -11,6 +11,8 @@ from nexus_launcher.themed_dialog import NexusDialog
 from nexus_launcher.nexus_platform.presentation_style import stylesheet
 from nexus_launcher.diagnostic_trial import TrialError
 from nexus_launcher.nexus_platform.theme_tokens import TOKENS
+from nexus_launcher.nexus_platform.workspace_visuals import workspace_style
+from nexus_launcher.diagnostic_fixes import suggest_fixes
 
 
 class ScanWorker(QThread):
@@ -93,7 +95,22 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.selected_instance_id = ''
         self.setWindowTitle('Диагностика · ' + name)
         self.setObjectName('platformRoot')
-        self.setStyleSheet(stylesheet())
+        self.setStyleSheet(stylesheet() + workspace_style() + '''
+            QDialog#platformRoot {background:#081523;color:#dceafa;}
+            QFrame#diagnosticHero {background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #183650,stop:1 #101e30);border:1px solid #35536f;border-radius:15px;}
+            QLabel#dialogTitle {font-family:"Segoe UI";font-size:28px;font-weight:600;color:#ecf6ff;}
+            QLabel#dialogTitle[compact=true] {font-size:22px;}
+            QFrame#diagnosticMetric {background:#11263a;border:1px solid #2e4c66;border-radius:11px;}
+            QLabel#diagnosticNumber {font-size:26px;color:#96d3ff;}
+            QLabel#diagnosticNumber[tone=warning] {color:#f2c06b;}
+            QLabel#diagnosticNumber[tone=muted] {color:#9fb4c9;}
+            QLabel#diagnosticStatus {background:#142b41;color:#c0d8eb;border:1px solid #2b4862;border-radius:8px;padding:9px 12px;font-size:12px;}
+            QListWidget,QTreeWidget,QPlainTextEdit {background:#0d1e30;color:#d4e4f4;border:1px solid #2d4962;border-radius:9px;selection-background-color:#284f70;selection-color:#f0f8ff;}
+            QListWidget::item {padding:10px;border-bottom:1px solid #233a50;}
+            QListWidget::item:selected {background:#284f70;color:#edf7ff;border-radius:6px;}
+            QHeaderView::section {background:#19344c;color:#b5d3ea;border:0;padding:9px;font-size:11px;}
+            QPlainTextEdit {font-family:"Consolas";font-size:12px;padding:10px;}
+        ''')
         self.resize(1080, 760)
         available = QApplication.primaryScreen().availableGeometry()
         self.resize(min(self.width(), int(available.width()*.94)), min(self.height(), int(available.height()*.94)))
@@ -101,21 +118,24 @@ class InstanceDiagnosticsDialog(NexusDialog):
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
         self.workspace_layout = layout
+        hero=QFrame();hero.setObjectName('diagnosticHero')
+        hero_layout=QVBoxLayout(hero);hero_layout.setContentsMargins(20,16,20,16);hero_layout.setSpacing(5)
+        layout.addWidget(hero)
         eyebrow = QLabel('NEXUS  /  СОСТОЯНИЕ СБОРКИ')
         self.workspace_eyebrow = eyebrow
         eyebrow.setObjectName('eyebrow')
-        layout.addWidget(eyebrow)
-        title = QLabel('Центр диагностики')
+        hero_layout.addWidget(eyebrow)
+        title = QLabel('Что мешает запуску?')
         self.workspace_title = title
         title.setObjectName('dialogTitle')
-        layout.addWidget(title)
+        hero_layout.addWidget(title)
         context = QLabel(name + '  ·  ' + loader.capitalize())
         context.setTextFormat(Qt.TextFormat.PlainText)
         context.setObjectName('muted')
         context.setWordWrap(True)
         context.setMaximumHeight(44)
         context.setToolTip(name)
-        layout.addWidget(context)
+        hero_layout.addWidget(context)
         summary = QHBoxLayout()
         summary.setSpacing(12)
         self.summary_values = []
@@ -151,6 +171,8 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.progress.setAccessibleName('Ход диагностики')
         layout.addWidget(self.progress)
         tabs = QTabWidget()
+        tabs.setUsesScrollButtons(True)
+        tabs.setElideMode(Qt.TextElideMode.ElideRight)
         self.tabs = tabs
         layout.addWidget(tabs, 1)
         issues = QSplitter(Qt.Orientation.Horizontal)
@@ -220,6 +242,18 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.nested_tree.currentItemChanged.connect(lambda current, previous: self.nested_source.setEnabled(current is not None))
         nested_layout.addWidget(self.nested_source, 0, Qt.AlignmentFlag.AlignRight)
         tabs.addTab(nested_page, 'Вложенные JAR')
+        fixes_page=QWidget();fixes_layout=QVBoxLayout(fixes_page)
+        fix_scope=QLabel('Пробные фиксы применяются только к отдельной копии. Исходная сборка не меняется. После фикса повторите проверку и проверьте запуск самостоятельно.')
+        fix_scope.setWordWrap(True);fix_scope.setObjectName('muted');fixes_layout.addWidget(fix_scope)
+        self.fixes_list=QListWidget();self.fixes_list.setAccessibleName('Предложения исправлений');fixes_layout.addWidget(self.fixes_list,1)
+        self.fix_detail=QLabel('Сначала проверьте сборку. Здесь появятся доступные действия.');self.fix_detail.setWordWrap(True);fixes_layout.addWidget(self.fix_detail)
+        fix_actions=QHBoxLayout()
+        self.fix_evidence=QPushButton('Показать причину');self.fix_evidence.setEnabled(False);self.fix_evidence.clicked.connect(self.show_fix_evidence)
+        self.fix_apply=QPushButton('Пробный фикс в копии…');self.fix_apply.setObjectName('primaryAction');self.fix_apply.setEnabled(False);self.fix_apply.clicked.connect(self.apply_selected_fix)
+        fix_actions.addWidget(self.fix_evidence);fix_actions.addStretch();fix_actions.addWidget(self.fix_apply);fixes_layout.addLayout(fix_actions)
+        self.fix_suggestions=[];self.fixes_list.currentRowChanged.connect(self.refresh_fix_actions)
+        tabs.addTab(fixes_page,'Исправления')
+        tabs.setTabText(0,'Проблемы')
         trial_actions = QHBoxLayout()
         self.prepare_trial = QPushButton('Создать пробную копию…')
         self.prepare_trial.setToolTip('Подготовить копию без мода из выбранного результата. Изменение требует подтверждения.')
@@ -294,6 +328,7 @@ class InstanceDiagnosticsDialog(NexusDialog):
         if self.worker is not None or self.review_dialog is not None:
             return
         self.report = None
+        self.fix_suggestions=[];self.fixes_list.clear();self.refresh_fix_actions()
         self.findings.clear()
         self.dependencies.clear()
         self.nested_tree.clear()
@@ -317,6 +352,13 @@ class InstanceDiagnosticsDialog(NexusDialog):
         if self.closing:
             return
         self.report = report
+        self.fix_suggestions=suggest_fixes(report)
+        self.fixes_list.clear()
+        for suggestion in self.fix_suggestions:
+            self.fixes_list.addItem(('Пробный фикс · ' if suggestion.filename else 'Ручная проверка · ') + redact(suggestion.title))
+        if self.fix_suggestions:
+            self.fixes_list.setCurrentRow(0)
+        self.refresh_fix_actions()
         count = sum(f.level != 'info' for f in report.findings)
         matched = sum(c.status == 'MATCH' for c in report.version_checks)
         mismatched = sum(c.status == 'MISMATCH' for c in report.version_checks)
@@ -394,6 +436,31 @@ class InstanceDiagnosticsDialog(NexusDialog):
         self.prepare_trial.setEnabled(bool(self.trials and filename and not busy and not self.trial_result))
         self.open_trial.setEnabled(not busy)
         self.open_original.setEnabled(not busy)
+        self.refresh_fix_actions()
+
+    def refresh_fix_actions(self, *_):
+        if not hasattr(self,'fix_apply'):
+            return
+        row=self.fixes_list.currentRow()
+        suggestion=self.fix_suggestions[row] if 0<=row<len(self.fix_suggestions) else None
+        busy=self.worker is not None or self.review_dialog is not None
+        self.fix_evidence.setEnabled(suggestion is not None)
+        self.fix_apply.setEnabled(bool(suggestion and suggestion.filename and self.trials and not busy and not self.trial_result))
+        self.fix_detail.setText(suggestion.detail if suggestion else 'Нет предложений. Выполните проверку; отсутствие предложений не подтверждает успешный запуск.')
+
+    def show_fix_evidence(self):
+        row=self.fixes_list.currentRow()
+        if 0<=row<len(self.fix_suggestions):
+            self.tabs.setCurrentIndex(0);self.findings.setCurrentRow(self.fix_suggestions[row].finding_index)
+
+    def apply_selected_fix(self):
+        row=self.fixes_list.currentRow()
+        if self.fix_apply.isEnabled() and 0<=row<len(self.fix_suggestions):
+            self._prepare_filename(self.fix_suggestions[row].filename)
+
+    def open_workspace(self):
+        self.showMaximized()
+        return self.exec()
 
     def start_operation(self, operation, result_handler, message):
         if self.worker is not None:
@@ -415,6 +482,11 @@ class InstanceDiagnosticsDialog(NexusDialog):
             return
         filename = self.report.findings[row].filename
         if not filename or self.trial_result:
+            return
+        self._prepare_filename(filename)
+
+    def _prepare_filename(self, filename):
+        if not self.trials or self.worker is not None or self.review_dialog is not None or self.trial_result:
             return
         self.start_operation(lambda cancelled: self.trials.prepare(filename, cancelled), self.copy_prepared,
                              'Подготавливаем точный план и проверяем игровые файлы…')

@@ -86,6 +86,7 @@ class CreateInstanceDialog(NexusDialog):
         self.template.addItems(TEMPLATES)
         form.addRow("Шаблон (без предустановленных модов)", self.template)
         advanced_button = QPushButton("Дополнительные настройки ▾")
+        advanced_button.setObjectName('advancedToggle')
         advanced_button.setCheckable(True)
         root.addWidget(advanced_button)
         advanced = QWidget()
@@ -137,6 +138,49 @@ class CreateInstanceDialog(NexusDialog):
         actions.addWidget(cancel)
         actions.addWidget(create)
         root.addLayout(actions)
+        from nexus_launcher.nexus_platform.workspace_visuals import workspace_style, BrandSurface
+        from nexus_launcher.nexus_platform.presentation_style import stylesheet
+        from PySide6.QtWidgets import QScrollArea
+        self.setStyleSheet(stylesheet() + workspace_style())
+        self.resize(680, 740)
+        self.setMinimumSize(540, 520)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(24, 18, 24, 18)
+        body_layout.setSpacing(18)
+        hero = BrandSurface()
+        hero_box = QVBoxLayout(hero)
+        hero_box.setContentsMargins(24, 20, 24, 20)
+        heading = QLabel('Начни свою историю')
+        heading.setObjectName('workspaceTitle')
+        heading.setWordWrap(True)
+        hero_box.addWidget(heading)
+        copy = QLabel('Версия игры, загрузчик и свои правила. Всё остальное можно настроить позже.')
+        copy.setWordWrap(True)
+        hero_box.addWidget(copy)
+        body_layout.addWidget(hero)
+        # Move existing fields, preserving their signals and model validation.
+        while root.count() > 1:
+            item = root.takeAt(0)
+            if item.widget():body_layout.addWidget(item.widget())
+            elif item.layout():body_layout.addLayout(item.layout())
+        form.setRowWrapPolicy(QFormLayout.WrapLongRows)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form.setVerticalSpacing(14)
+        advanced_form.setRowWrapPolicy(QFormLayout.WrapLongRows)
+        advanced_form.setVerticalSpacing(12)
+        body_layout.addStretch()
+        scroll = QScrollArea()
+        scroll.setObjectName('creationScroll')
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(body)
+        root.insertWidget(0, scroll, 1)
+        create.setObjectName('primaryAction')
+        root.setContentsMargins(0, 0, 0, 16)
+        for label in self.findChildren(QLabel):
+            label.setWordWrap(True)
+        self.setProperty('workspaceCreation', True)
 
     def values(self):
         return (
@@ -772,7 +816,7 @@ class InstancePage(QWidget):
         owner = self.launch_owner if self.launch_owner is not None else self.window()
         trials = DiagnosticTrials(self.service, source_id, lambda: launcher_idle(owner))
         dialog = InstanceDiagnosticsDialog(self.service.path_for(source_id), self.current.loader, self.current.name, self, trials=trials)
-        dialog.exec()
+        dialog.open_workspace()
         if dialog.trial_result:
             self.refresh(dialog.selected_instance_id or source_id)
 

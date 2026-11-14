@@ -1,8 +1,8 @@
 """Native mod presentation; project content cannot execute HTML or read files."""
 from PySide6.QtCore import Qt, QDateTime
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QSizePolicy
-from .artwork import landscape
 from .project_content import ProjectBody  # noqa: F401
+from .workspace_visuals import monogram
 
 
 class ModTitle(QPushButton):
@@ -23,13 +23,13 @@ class ModRow(QWidget):
         self.setObjectName('modRow')
         self.setAttribute(Qt.WA_StyledBackground, True)
         root = QHBoxLayout(self)
-        root.setContentsMargins(14, 12, 14, 12)
+        root.setContentsMargins(20, 16, 20, 16)
         root.setSpacing(18)
         self.icon = QLabel()
         self.icon.setObjectName('modIcon')
         self.icon.setFixedSize(80, 80)
         self.icon.setAlignment(Qt.AlignCenter)
-        self.icon.setPixmap(landscape(hit.get('project_id', hit['title']), 80, 80))
+        self.icon.setPixmap(monogram(hit['title'], 64))
         root.addWidget(self.icon)
         text = QVBoxLayout()
         title_row = QHBoxLayout()
@@ -41,6 +41,8 @@ class ModRow(QWidget):
         author = QLabel('от ' + hit['author'] if hit.get('author') else '')
         author.setTextFormat(Qt.PlainText)
         author.setObjectName('muted')
+        author.setMaximumWidth(160)
+        author.setToolTip(author.text())
         title_row.addWidget(title, 1)
         title_row.addWidget(author)
         text.addLayout(title_row)

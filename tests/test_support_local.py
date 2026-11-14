@@ -13,6 +13,44 @@ from nexus_launcher.nexus_account import NexusAccountClient, NexusProfile, Accou
 from nexus_launcher.nexus_platform.support_page import SupportPage
 
 
+@pytest.mark.parametrize('code,status,expected', [('SUPPORT_UNAVAILABLE',503,'не включена'), ('SUPPORT_STORAGE_UNAVAILABLE',503,'Хранилище'), (None,403,'HTTP 403')])
+def test_support_errors_are_actionable(code,status,expected):
+    from nexus_launcher.nexus_platform.support_page import support_error
+    assert expected in support_error(AccountError('private server detail',code=code,http_status=status))
+
+
+def test_send_button_creates_ticket_and_preserves_retry_on_service_disabled(tmp_path,monkeypatch):
+    app=QApplication.instance() or QApplication([])
+    work=[];calls=[]
+    class Thread:
+        def __init__(self,target,**kwargs):self.target=target
+        def start(self):work.append(self.target)
+    class Client:
+        def support_session(self,account):return 'synthetic'
+        def _request(self,path,**kwargs):
+            if path=='/api/launcher/profile':return {'user':{'id':'fixture'}},None
+            calls.append((path,kwargs))
+            raise AccountError('disabled',code='SUPPORT_UNAVAILABLE',http_status=503)
+    launcher=SimpleNamespace(account_profile=NexusProfile('','fixture@example.invalid',user_id='fixture'),account_client=Client())
+    monkeypatch.setattr('nexus_launcher.nexus_platform.support_page.threading.Thread',Thread)
+    monkeypatch.setattr('nexus_launcher.nexus_platform.support_page.QSettings',lambda *args:QSettings(str(tmp_path/'state.ini'),QSettings.IniFormat))
+    page=SupportPage(launcher);page.owner='fixture'
+    page.subject.setText('Test issue');page.text.setPlainText('Synthetic question')
+    for _ in range(2):
+        page.send_button.click()
+        assert page.busy and not page.send_button.isEnabled()
+        work.pop(0)();app.processEvents()
+        assert not page.busy and page.send_button.isEnabled()
+        assert 'не включена' in page.state.text()
+        assert page.text.toPlainText()=='Synthetic question'
+    assert len(calls)==2
+    assert all(path=='/api/v1/support/tickets' for path,_ in calls)
+    assert calls[0][1]['idempotency_key']==calls[1][1]['idempotency_key']
+    page.close_button.click()
+    assert 'Сначала выберите' in page.state.text()
+    page.close()
+
+
 def test_account_profile_without_nick_and_stable_id():
     profile = NexusAccountClient('https://fixture.test')._profile_from_result({'user':{'id':'fixture-account','minecraftNick':'','email':'a@fixture.test','profileCompleted':False}}, 'fixture-token')
     assert profile.user_id == 'fixture-account'

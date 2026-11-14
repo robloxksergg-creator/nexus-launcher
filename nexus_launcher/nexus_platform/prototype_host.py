@@ -28,6 +28,8 @@ class AssetServer:
             html = resource("approved-ui/index.html").read_bytes()
             css = browser_tokens().encode() + resource("academy/learning.css").read_bytes() + resource("studio/workspace.css").read_bytes()
             adapter = resource("academy/editor-adapter.js").read_bytes() + resource("studio/workspace.js").read_bytes()
+            css += resource("studio/placements.css").read_bytes()
+            adapter += b"\n" + resource("studio/placements.js").read_bytes()
             html = html.replace(b"<style>", b"<style>.app{visibility:hidden!important}</style><style>", 1)
             self.assets = {"/": (html + b"<style>" + css + b"</style><script>" + adapter + b"</script>", "text/html; charset=utf-8")}
             self.assets["/gearmorph-official.png"] = (resource("gearmorph-official.png").read_bytes(), "image/png")

@@ -677,7 +677,7 @@ class PlatformLauncher(CoreLauncher):
     def _open_instance_diagnostics(self):
         from .instance_diagnostics_dialog import InstanceDiagnosticsDialog
         dialog = InstanceDiagnosticsDialog(self._instance_dir(), self.current_server.loader, self.current_server.name, self)
-        dialog.exec()
+        dialog.open_workspace()
 
     def _show_logs(self):
         self.logs_page.set_instance(self._instance_dir())

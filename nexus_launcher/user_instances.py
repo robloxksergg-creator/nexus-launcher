@@ -265,6 +265,21 @@ class InstanceService:
         data = asdict(instance)
         atomic_json(root / "instance.json", data)
 
+    def change_runtime(self,instance_id,minecraft_version,loader,loader_version):
+        if not isinstance(minecraft_version,str) or not re.fullmatch(r'\d+\.\d+(?:\.\d+)?',minecraft_version):
+            raise ValueError('Укажите версию Minecraft, например 1.21.1.')
+        if loader not in VALID_LOADERS:raise ValueError('Неизвестный загрузчик.')
+        version=loader_provider(loader).normalize(minecraft_version,loader_version)
+        if loader!='vanilla' and not version:raise ValueError('Укажите версию загрузчика для этой версии Minecraft.')
+        if version and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.+_-]{0,99}',version):raise ValueError('Некорректная версия загрузчика.')
+        instance=self.load(instance_id)
+        if instance.instance_type!='custom':raise ValueError('Доступно только для личных сборок.')
+        self.backup_manifest(instance_id,'before-runtime-change')
+        instance.minecraft_version=minecraft_version;instance.loader=loader;instance.loader_version=version if loader!='vanilla' else ''
+        self.save(instance)
+        self.audit(instance_id,'runtime_changed',{'minecraft':minecraft_version,'loader':loader,'loader_version':instance.loader_version})
+        return instance
+
     def audit(self, instance_id: str, action: str, details: dict | None = None) -> None:
         entry = {"time": utc_now(), "action": action, "details": details or {}}
         path = self.path_for(instance_id) / ".nexus" / "operations.jsonl"

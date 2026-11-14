@@ -271,7 +271,8 @@ def test_mod_opens_dedicated_page_and_returns_to_same_results(candidate, monkeyp
     assert not catalog.search_header.isVisible()
     assert catalog.project_tabs.count() == 4
     assert 'Быстрая отрисовка' in catalog.detail.toPlainText()
-    assert 'Sodium 0.6' in catalog.versions.toPlainText()
+    from PySide6.QtWidgets import QLabel
+    assert any('Sodium 0.6' in label.text() for label in catalog.versions.findChildren(QLabel))
     assert catalog.detail.loadResource(2, None) is None
     if os.environ.get('NEXUS_MOD_PAGE_CAPTURE'):
         window.grab().save(os.environ['NEXUS_MOD_PAGE_CAPTURE'])

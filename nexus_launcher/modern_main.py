@@ -1470,6 +1470,32 @@ class Launcher(QMainWindow):
             return
         if launch_mode not in {"normal", "test"}:
             raise ValueError("Неизвестный режим запуска")
+        if self.account_profile and self.account_profile.skin_png:
+            from nexus_launcher.skin_readiness import skin_component
+            instance = self.instance_service.load(instance_id)
+            state = skin_component(self.instance_service.path_for(instance_id), instance.loader)
+            if state != 'present':
+                dialog = QMessageBox(self)
+                dialog.setWindowTitle('Скин NEXUS в этой сборке')
+                dialog.setText('Для отображения скина нужен совместимый компонент скинов.')
+                dialog.setInformativeText(
+                    'Чистая Vanilla пока не поддерживается. Можно запустить игру без скина NEXUS.'
+                    if state == 'vanilla' else
+                    'Проверим CustomSkinLoader для версии Minecraft и загрузчика этой сборки. '
+                    'Перед скачиванием будут показаны совместимая версия и зависимости. '
+                    'Автоматически игра после установки не запускается.')
+                install = None
+                if state == 'missing' and hasattr(self.instances_page, '_catalog_install'):
+                    install = dialog.addButton('Подготовить установку', QMessageBox.ActionRole)
+                without = dialog.addButton('Запустить без скина', QMessageBox.AcceptRole)
+                dialog.addButton('Отмена', QMessageBox.RejectRole)
+                dialog.exec()
+                if install is not None and dialog.clickedButton() == install:
+                    self.show_instances()
+                    self.instances_page._catalog_install(instance_id, 'customskinloader')
+                    return
+                if dialog.clickedButton() != without:
+                    return
         if launch_mode == "normal":
             self.current_user_instance_id = instance_id
         self._start_launch_worker(self._launch_user_instance_worker, (instance_id, launch_mode))
@@ -1840,11 +1866,15 @@ class Launcher(QMainWindow):
         profile = self.account_profile
         if not profile or not profile.skin_png:
             return
-        loader_dir = folder / "CustomSkinLoader"
-        skin_dir = loader_dir / "LocalSkin" / "skins"
+        if not re.fullmatch(r'[A-Za-z0-9_]{3,16}', profile.minecraft_nick):
+            raise ValueError('Некорректный Minecraft-ник для скина')
+        from nexus_launcher.safe_paths import checked_path
+        from nexus_launcher.user_instances import atomic_json
+        loader_dir = checked_path(folder, 'CustomSkinLoader')
+        skin_dir = checked_path(folder, 'CustomSkinLoader/LocalSkin/skins')
         skin_dir.mkdir(parents=True, exist_ok=True)
-        target = skin_dir / f"{profile.minecraft_nick}.png"
-        temporary = target.with_suffix(".png.part")
+        target = checked_path(folder, f'CustomSkinLoader/LocalSkin/skins/{profile.minecraft_nick}.png')
+        temporary = checked_path(folder, f'CustomSkinLoader/LocalSkin/skins/{profile.minecraft_nick}.png.part')
         temporary.write_bytes(profile.skin_png)
         os.replace(temporary, target)
 
@@ -1852,15 +1882,16 @@ class Launcher(QMainWindow):
         # generated defaults query Mojang and third-party services before the
         # local file, so a public account with the same nickname can otherwise
         # override the skin uploaded on the NEXUS website.
-        config_path = loader_dir / "CustomSkinLoader.json"
+        config_path = checked_path(folder, 'CustomSkinLoader/CustomSkinLoader.json')
         config: dict = {}
         if config_path.is_file():
             try:
                 loaded = json.loads(config_path.read_text(encoding="utf-8"))
-                if isinstance(loaded, dict):
-                    config = loaded
+                if not isinstance(loaded, dict):
+                    raise ValueError('Skin configuration must be an object')
+                config = loaded
             except (OSError, ValueError):
-                config = {}
+                raise ValueError('Конфигурация скинов повреждена; исходный файл сохранён. Откройте диагностику сборки.') from None
         local_loader = {
             "name": "NEXUS LocalSkin",
             "type": "Legacy",
@@ -1875,7 +1906,7 @@ class Launcher(QMainWindow):
             "type": "Legacy",
             "checkPNG": True,
             "skin": "https://nexusmc-site.robloxksergg.workers.dev/api/minecraft/skin/{USERNAME}.png",
-            "model": profile.skin_model,
+            "model": "auto",
         }
         old_loaders = config.get("loadlist", [])
         if not isinstance(old_loaders, list):
@@ -1894,7 +1925,7 @@ class Launcher(QMainWindow):
         config.setdefault("buildNumber", 40)
         config["forceDisableCache"] = True
         config["enableLocalProfileCache"] = False
-        config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_json(config_path, config)
 
         caches = loader_dir / "caches"
         if caches.is_dir():
@@ -2011,6 +2042,13 @@ class Launcher(QMainWindow):
                     self.bridge.status.emit("Сервер обновлений недоступен — запускаю последнюю проверенную сборку")
             self._sync_skin_for_instance(folder)
             ensure_visual_defaults(folder)
+            if self.account_profile and self.account_profile.skin_png:
+                from nexus_launcher.skin_readiness import skin_component
+                skin_state = skin_component(folder, release.loader if release and release.loader else server.loader)
+                if skin_state != 'present':
+                    self.bridge.status.emit('В серверной сборке компонент скинов не подтверждён. '
+                        'Автору нужно включить совместимый CustomSkinLoader в проверенный манифест; '
+                        'состав серверной сборки автоматически не меняется.')
             minecraft_server = release.minecraft_server if release and release.minecraft_server else server.address
             if minecraft_server:
                 ensure_server(folder / "servers.dat", f"{server.name} • NEXUS", minecraft_server)

@@ -28,7 +28,7 @@ def test_installer_percent_is_separate_and_failure_does_not_show_completion(monk
     assert not view.bar.isTextVisible()
     assert view.bar.value() == 50
     view.progress(('CHECKING', 0, 0))
-    assert view.percent.text() == 'Размер пока неизвестен'
+    assert view.percent.text() == '…'
     assert view.bar.maximum() == 0
     view.result((None, 'synthetic error'))
     assert view.percent.text() == 'Установка не завершена'

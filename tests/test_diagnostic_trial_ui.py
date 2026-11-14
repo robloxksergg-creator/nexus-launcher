@@ -72,6 +72,29 @@ class TrialUITests(unittest.TestCase):
         self.assertEqual([x.id for x in self.service.list()],[self.original.id])
         self.assertFalse((self.service.root/'.diagnostic-staging').exists())
 
+    def test_fixes_tab_confirms_copy_preserving_source(self):
+        self.assertGreater(self.dialog.fixes_list.count(),0)
+        self.dialog.tabs.setCurrentIndex(3)
+        self.assertTrue(self.dialog.fix_apply.isEnabled())
+        if os.environ.get('NEXUS_FIXES_SCREENSHOT'):
+            self.dialog.showMaximized();QTest.qWait(150)
+            self.assertTrue(self.dialog.grab().save(os.environ['NEXUS_FIXES_SCREENSHOT']))
+        self.respond(True);self.dialog.fix_apply.click();self.wait_idle()
+        result=self.dialog.trial_result
+        self.assertIsNotNone(result)
+        copy_root=self.service.path_for(result.trial_id)
+        self.assertTrue((copy_root/'disabled_mods/example.jar').is_file())
+        self.assertEqual(self.before,{p.relative_to(self.root).as_posix():p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
+        self.assertFalse(self.dialog.fix_apply.isEnabled())
+
+    def test_open_workspace_maximizes_without_starting_game(self):
+        states=[]
+        def close():
+            states.append(self.dialog.isMaximized());self.dialog.reject()
+        QTimer.singleShot(80,close)
+        self.dialog.open_workspace()
+        self.assertEqual(states,[True])
+
     def test_confirm_creates_copy_and_navigation_does_not_launch(self):
         self.respond(True);self.dialog.prepare_trial.click();self.wait_idle()
         result=self.dialog.trial_result

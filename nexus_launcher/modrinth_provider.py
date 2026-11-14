@@ -5,6 +5,8 @@ import json
 import os
 import re
 import tempfile
+import time
+from copy import deepcopy
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -39,7 +41,7 @@ class ModrinthProvider:
         url = f"{API}{path}" + (f"?{query}" if query else "")
         request = urllib.request.Request(url, headers={"User-Agent": self.user_agent, "Accept": "application/json"})
         try:
-            with open_https(request, timeout=25, allowed_hosts={"api.modrinth.com"}) as response:
+            with open_https(request, timeout=12, allowed_hosts={"api.modrinth.com"}) as response:
                 return json.loads(read_limited(response))
         except Exception as error:
             raise ProviderError(f"Modrinth недоступен: {error}") from error
@@ -74,10 +76,26 @@ class ModrinthProvider:
 
     def resolve(self, project_id: str, minecraft_version: str, loader: str) -> list[dict]:
         resolved, visiting = {}, set()
+        cache = {}
+        deadline = time.monotonic() + 45
+
+        def fetch(key, read):
+            if time.monotonic() > deadline:
+                raise ProviderError('Проверка зависимостей заняла слишком много времени. Повтори попытку.')
+            if key not in cache:
+                if len(cache) >= 64:
+                    raise ProviderError('Слишком большой граф зависимостей: требуется ручная проверка.')
+                cache[key] = read()
+                if time.monotonic() > deadline:
+                    raise ProviderError('Проверка зависимостей заняла слишком много времени. Повтори попытку.')
+            return deepcopy(cache[key])
+
+        def exact(version):
+            return fetch(('version', version), lambda: self.version(version))
 
         def visit(project: str, exact_version: str = "", required_by: str = ""):
             versions = (
-                [self.version(exact_version)] if exact_version else self.versions(project, minecraft_version, loader)
+                [exact(exact_version)] if exact_version else fetch(('project', project), lambda: self.versions(project, minecraft_version, loader))
             )
             if not versions:
                 raise ProviderError(f"Нет совместимой версии мода {project} для {minecraft_version}/{loader}")
@@ -102,7 +120,7 @@ class ModrinthProvider:
                 dep_version = dependency.get("version_id") or ""
                 if dep_project or dep_version:
                     visit(
-                        dep_project or self.version(dep_version)["project_id"],
+                        dep_project or exact(dep_version)["project_id"],
                         dep_version,
                         item.get("project_id", project),
                     )
@@ -145,6 +163,9 @@ class ModInstaller:
             if origin(file["url"])[1] != "cdn.modrinth.com":
                 raise ProviderError("Недоверенный источник файла Modrinth")
             checked_path(root, "mods/" + filename)
+            previous = next((old for old in instance.installed_mods if old.project_id == version['project_id']), None)
+            enabled = previous.enabled if previous else True
+            destination = ('mods/' if enabled else 'disabled_mods/') + filename
             expected_size = file.get("size", 0)
             if type(expected_size) is not int or not 0 <= expected_size <= MAX_FILE_BYTES:
                 raise ProviderError("Invalid mod file size")
@@ -162,7 +183,7 @@ class ModInstaller:
                     raise ProviderError("Mod file size mismatch")
                 if digest.hexdigest().lower() != expected.lower():
                     raise ProviderError(f"SHA-512 не совпал для {filename}")
-                os.replace(temporary, checked_path(root, "mods/" + filename))
+                os.replace(temporary, checked_path(root, destination))
             finally:
                 if os.path.exists(temporary):
                     os.unlink(temporary)
@@ -172,7 +193,7 @@ class ModInstaller:
                 version.get("name") or filename,
                 filename,
                 digest.hexdigest(),
-                True,
+                enabled,
                 version.get("required_by", []),
             )
             previous = next((old for old in instance.installed_mods if old.project_id == mod.project_id), None)

@@ -52,22 +52,10 @@ def main():
   def __init__(self):
    from nexus_launcher.public_update_identity import CHANNEL
    super().__init__();self.worker=None;self.target=None;self.details=None;self.completion=None;self.shortcut_created=False;self.needs_permissions=False;self.permission_request=None
-   self.setWindowTitle('Установка NEXUS Testers' if CHANNEL=='beta' else 'Установка NEXUS Launcher');self.setMinimumWidth(520);self.setStyleSheet(stylesheet()+f"QDialog {{ background:{TOKENS['background']}; }}")
-   box=QVBoxLayout(self);box.setContentsMargins(28,24,28,24);box.setSpacing(16)
-   title=QLabel('NEXUS Testers · Beta' if CHANNEL=='beta' else 'NEXUS Launcher');title.setStyleSheet('font-size:28px;font-weight:700');box.addWidget(title)
-   info=QLabel('Выберите папку. По умолчанию — рядом с установщиком. Для защищённой папки предложим запрос Windows на её создание. Скачивание и запуск лаунчера выполняются без повышения прав.');info.setWordWrap(True);box.addWidget(info)
-   box.addWidget(QLabel('Папка установки и данных сборок'))
-   from nexus_launcher.installer_location import default_directory
-   row=QHBoxLayout();self.path=QLineEdit(str(default_directory()));self.path.setAccessibleName('Папка установки');self.choose=QPushButton('Выбрать…');self.choose.clicked.connect(self.browse);row.addWidget(self.path);row.addWidget(self.choose);box.addLayout(row)
-   note=QLabel('Старые сборки не переносятся автоматически. Место на диске будет проверено перед загрузкой. EXE пока без подписи Windows: Smart App Control может запретить запуск.');note.setWordWrap(True);note.setMinimumHeight(72);box.addWidget(note)
-   self.status=QLabel('Готово к установке');self.status.setWordWrap(True);box.addWidget(self.status)
-   self.percent=QLabel('0%');self.percent.setAccessibleName('Процент установки');box.addWidget(self.percent)
-   self.bar=QProgressBar();self.bar.setTextVisible(False);self.bar.setRange(0,100);self.bar.setValue(0);box.addWidget(self.bar)
-   self.go=QPushButton('Скачать и установить');self.go.setObjectName('primaryAction');self.go.clicked.connect(self.start);box.addWidget(self.go)
-   self.open=QPushButton('Открыть папку установки');self.open.setVisible(False);self.open.clicked.connect(lambda:os.startfile(str(self.target.parent)));box.addWidget(self.open)
-   self.launch=QPushButton('Запустить NEXUS');self.launch.setVisible(False);self.launch.clicked.connect(self.run_launcher);box.addWidget(self.launch)
-   legal=QLabel('GPL-3.0-only · Икрам Ikram / ForceCore');box.addWidget(legal)
-   self.licenses=QPushButton('Лицензии компонентов');self.licenses.clicked.connect(lambda:os.startfile(str(Path(sys._MEIPASS)/'third-party-notices')));box.addWidget(self.licenses)
+   self.setWindowTitle('Установка NEXUS Testers' if CHANNEL=='beta' else 'Установка NEXUS Launcher')
+   from nexus_launcher.installer_presentation import build_installer
+   build_installer(self, CHANNEL=='beta')
+   self.licenses.clicked.connect(lambda:os.startfile(str(Path(sys._MEIPASS)/'third-party-notices')))
   def browse(self):
    value=QFileDialog.getExistingDirectory(self,'Выберите папку установки',self.path.text())
    if value:self.path.setText(str(Path(value)))
@@ -80,8 +68,13 @@ def main():
    phase,done,total=value
    self.status.setText({'CHECKING':'Проверяем выпуск…','DOWNLOADING':'Скачиваем полный лаунчер…','VERIFYING':'Проверяем и распаковываем файлы…','COMPLETE':'Лаунчер установлен.'}[phase])
    self.bar.setRange(0,100 if total else 0)
-   self.percent.setText(f'{min(99,done*100//total)}%' if total else 'Размер пока неизвестен')
+   self.percent.setText(f'{min(99,done*100//total)}%' if total else '…')
    if total:self.bar.setValue(min(99,done*100//total))
+   if hasattr(self,'transfer_detail'):
+    self.transfer_detail.setText(f'{done/(1024*1024):.1f} / {total/(1024*1024):.1f} МБ' if total else 'Проверяем файлы. Это может занять несколько минут.' if phase=='VERIFYING' else 'Ожидаем данные выпуска…')
+    active={'CHECKING':0,'DOWNLOADING':1,'VERIFYING':2,'COMPLETE':3}[phase]
+    for index,label in enumerate(self.phase_labels):label.setStyleSheet('color:#83c9ff;font-weight:650;' if index<=active else 'color:#8193aa;')
+
   def result(self,result):
    details,error=result;self.needs_permissions=error=='INSTALL_PERMISSION_REQUIRED';self.details=details;self.target=details.executable if details else None;self.status.setText('Нет прав записи в выбранную папку.' if self.needs_permissions else error or 'Установка завершена. Можно запускать NEXUS.');self.bar.setRange(0,100);self.bar.setValue(100 if details else 0);self.percent.setText('100%' if details else 'Установка не завершена')
   def done_worker(self):

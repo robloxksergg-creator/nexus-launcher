@@ -43,14 +43,15 @@ def decode_image(data, width=1000, dimension=MAX_DIMENSION):
 
 
 class MediaCache:
-    def __init__(self, budget=16 * 1024 * 1024, capacity=64, ttl=300):
+    def __init__(self, budget=16 * 1024 * 1024, capacity=64, ttl=300, validator=safe_image):
+        self.validator = validator
         self.budget, self.capacity, self.ttl = budget, capacity, ttl
         self.entries = OrderedDict()
         self.bytes = 0
         self.lock = Lock()
 
     def get(self, url):
-        if not safe_image(url):
+        if not self.validator(url):
             return None
         with self.lock:
             entry = self.entries.pop(url, None)
@@ -65,7 +66,7 @@ class MediaCache:
 
     def put(self, url, data):
         # Only the downloader inserts successfully decoded, policy-checked data.
-        if not safe_image(url) or not data or len(data) > min(MAX_BYTES, self.budget) or decode_image(data).isNull():
+        if not self.validator(url) or not data or len(data) > min(MAX_BYTES, self.budget) or decode_image(data).isNull():
             return
         with self.lock:
             previous = self.entries.pop(url, None)
@@ -99,15 +100,19 @@ CACHE = MediaCache()
 
 
 def fetch_media(url, cancelled=lambda: False, max_bytes=MAX_BYTES):
+    return fetch_checked_media(url,cancelled,max_bytes,validator=safe_image,cache=CACHE,opener=open_media)
+
+
+def fetch_checked_media(url, cancelled, max_bytes, *, validator, cache, opener):
     max_bytes = min(MAX_BYTES, max_bytes)
-    if not safe_image(url) or cancelled():
+    if not validator(url) or cancelled():
         return b''
-    cached = CACHE.get(url)
+    cached = cache.get(url)
     if cached is not None:
         return cached if len(cached) <= max_bytes and not cancelled() else b''
     try:
         request = urllib.request.Request(url, headers={'User-Agent': 'NexusLauncher/2.0 (Modrinth media)'})
-        with open_media(request) as reply:
+        with opener(request) as reply:
             length = reply.headers.get('Content-Length')
             if length and int(length) > max_bytes:
                 return b''
@@ -123,7 +128,7 @@ def fetch_media(url, cancelled=lambda: False, max_bytes=MAX_BYTES):
             data = b''.join(chunks)
         if cancelled() or decode_image(data).isNull():
             return b''
-        CACHE.put(url, data)
+        cache.put(url, data)
         return data
     except Exception:
         return b''

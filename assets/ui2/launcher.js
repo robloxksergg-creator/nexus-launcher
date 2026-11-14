@@ -6,6 +6,7 @@
   const names={home:'Главная',library:'Мои сборки',saved:'Мои миры',catalog:'Каталог миров',server:'Мир NEXUS',profile:'Профиль',settings:'Настройки',downloads:'Загрузки',logs:'Логи',mods:'Моды сервера',studio:'Студия',tech:'Control Center'};
   let state=null, route='home', serverId='', nativeRoute='library', notificationTimer=0;
   const queries={catalog:''}, filters={catalog:'all'}, scrolls=new Map(), trail=[];
+  let didRender=false;
   document.querySelectorAll('[data-icon]').forEach(node=>node.innerHTML=icon(node.dataset.icon));
   function action(name,id='') { location.href='/ui-action/'+name+(id?'?id='+encodeURIComponent(id):''); }
   function navSync() {
@@ -18,7 +19,7 @@
     const oldScroll=content.scrollTop;
     const {home,catalog,profile,server}=window.NexusScreens.create(state,queries,filters,serverId);
     const markup=route==='home'?home():route==='catalog'?catalog():route==='saved'?catalog(true):route==='profile'?profile():route==='server'?server():'';
-    if(markup){content.innerHTML=`<div class="page">${markup}</div>`;if(route==='profile')window.NexusSkin?.mount(document.querySelector('#skin-panel'));}
+    if(markup){const entering=focus||!didRender;didRender=true;content.innerHTML=`<div class="page page-${route}${entering?' page-enter':''}">${markup}</div>`;if(route==='profile')window.NexusSkin?.mount(document.querySelector('#skin-panel'));}
     content.scrollTop=focus?(scrolls.get(route+serverId)||0):oldScroll;
     navSync();
     if(focus)content.focus({preventScroll:true});

@@ -7,7 +7,7 @@ import re
 from markdown_it import MarkdownIt
 from markdown_it.renderer import RendererHTML
 
-from .mod_media import safe_image
+from .description_media import safe_description_image as safe_image, MAX_DESCRIPTION_IMAGES
 
 
 def link_label(url, caption):
@@ -38,7 +38,7 @@ class InertRenderer(RendererHTML):
         token = tokens[idx]
         url = token.attrGet('src') or ''
         caption = self.renderInlineAsText(token.children or [], options, env)[:160]
-        if not safe_image(url) or (url not in env['urls'] and len(env['urls']) >= 12):
+        if not safe_image(url) or (url not in env['urls'] and len(env['urls']) >= MAX_DESCRIPTION_IMAGES):
             href = env['anchors'][-1] if env['anchors'] else ''
             # A rejected badge still names its link, rather than breaking it
             # into Markdown brackets and an unrelated image error paragraph.

@@ -10,7 +10,8 @@ from PySide6.QtGui import QDesktopServices, QTextCursor, QTextDocument, QTextBlo
 from PySide6.QtWidgets import QTextBrowser
 
 from .theme_tokens import TOKENS
-from .mod_media import safe_image, fetch_media, decode_image
+from .mod_media import decode_image
+from .description_media import safe_description_image as safe_image, fetch_description_media as fetch_media
 from .markdown_content import render_content
 
 MEDIA_URL = int(QTextFormat.Property.UserProperty) + 20

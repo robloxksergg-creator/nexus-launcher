@@ -131,6 +131,12 @@ class CreatorWorkspace(QWidget):
             document = event['snapshot']
             if not isinstance(document, dict) or not isinstance(document.get('components'), list) or len(document['components']) > 30:
                 return
+            if 'placements' in document:
+                from nexus_launcher.creator_placements import validate_placements
+                try:
+                    document['placements'] = validate_placements(document['placements'])
+                except ValueError:
+                    return
             self.adapter.document = document
         if kind == 'editor.ready':
             self.ready = True

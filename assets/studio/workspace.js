@@ -100,5 +100,66 @@
     assetBody.replaceChildren();const assets=studioDraft.filter(x=>x.src);if(!assets.length)assetBody.append(make('p','canvas-help','Ресурсов пока нет. Добавь изображение или видео и выбери файл в свойствах.'));for(const item of assets){const entry=button(item.name,()=>{selectedID=item.id;renderStudio();showBottom('assets');});if(item.type==='png'){const image=make('img','');image.src=item.src;image.alt='';entry.prepend(image);}assetBody.append(entry);}assetBody.append(make('p','canvas-help','Используемые ресурсы страницы. Локальные файлы доступны в текущем сеансе.'));
   };
   const oldCanvas=renderCanvas;renderCanvas=(target,items,editing)=>{oldCanvas(target,items,editing);for(const item of items){const node=target.querySelector(`[data-item="${CSS.escape(item.id)}"]`);if(node)node.hidden=!!item.hidden;}};
-  window.NexusStudioUI=Object.freeze({openPicker,showBottom});
+  // Professional workspace: existing tools/models are reparented, not duplicated.
+  const toolbar=studio.querySelector('.canvas-toolbar');
+  toolbar.querySelector('strong').textContent='NEXUS / ACADEMY';
+  studio.querySelector('#studio-cancel').title='Предпросмотр страницы';
+  studio.querySelector('#studio-save').title='Сохранить учебный документ';
+  const dock=make('aside','creator-dock');dock.setAttribute('aria-label','Свойства, слои и ресурсы');
+  work.append(dock);dock.append(inspector,bottom);
+  const dockTitle=make('header','creator-dock-title','СВОЙСТВА');inspector.prepend(dockTitle);
+  bottom.setAttribute('aria-label','Слои и ресурсы документа');
+  const controls=make('div','creator-options');
+  const docTab=make('span','creator-document-tab','Учебная страница');
+  const viewHint=make('span','creator-document-hint','Процентная сетка · 1000 × 700');
+  controls.append(docTab,viewHint);
+  const modes=make('div','creator-workspace-modes');modes.setAttribute('aria-label','Рабочие панели');
+  const designMode=button('Дизайн',()=>{showBottom('layers');designMode.setAttribute('aria-pressed','true');assetsMode.setAttribute('aria-pressed','false');});
+  const assetsMode=button('Ресурсы',()=>{showBottom('assets');assetsMode.setAttribute('aria-pressed','true');designMode.setAttribute('aria-pressed','false');});
+  designMode.setAttribute('aria-pressed','true');assetsMode.setAttribute('aria-pressed','false');
+  const learnMode=button('Обучение',()=>window.NexusCreator.academy());
+  modes.append(designMode,assetsMode,learnMode);controls.append(modes);toolbar.after(controls);
+  const area=studio.querySelector('.canvas-area');
+  const oldHelp=area.querySelector(':scope>.canvas-help');if(oldHelp)oldHelp.hidden=true;
+  const canvasStage=make('div','creator-canvas-stage'),canvasViewport=make('div','creator-canvas-viewport');board.before(canvasViewport);canvasViewport.append(canvasStage);canvasStage.append(board);
+  board.tabIndex=0;board.setAttribute('aria-label','Холст учебной страницы');
+  const rulerX=make('div','creator-ruler-x');rulerX.setAttribute('aria-hidden','true');
+  for(let n=0;n<=100;n+=10)rulerX.append(make('span','',String(n)));
+  const rulerY=make('div','creator-ruler-y');rulerY.setAttribute('aria-hidden','true');
+  for(let n=0;n<=100;n+=10)rulerY.append(make('span','',String(n)));
+  canvasStage.prepend(rulerX,rulerY);
+  const statusBar=make('footer','creator-statusbar');
+  const selectionReadout=make('span','creator-selection-readout','Выбери элемент на холсте');
+  const docReadout=make('span','creator-document-readout');
+  const zoomTools=make('div','creator-zoom-tools');zoomTools.setAttribute('aria-label','Масштаб холста');
+  const zoomValue=make('output','creator-zoom-value','100%');zoomValue.setAttribute('aria-live','polite');
+  let zoom=1;
+  const originalTextBounds=textExceedsPanel;
+  textExceedsPanel=(outer,inner,padding,width,height,scaleX,scaleY)=>{const normalize=rect=>Object.fromEntries(['left','top','right','bottom','width','height'].map(key=>[key,rect[key]/zoom]));return originalTextBounds(normalize(outer),normalize(inner),padding,width,height,scaleX,scaleY);};
+  function setZoom(value,manual=true){if(!Number.isFinite(value))return;zoomValue.dataset.manual=String(manual);zoom=Math.max(.25,Math.min(1.5,value));canvasStage.style.setProperty('--canvas-zoom',String(zoom));const width=studio.classList.contains('creator-compact')?640:1000;canvasViewport.style.width=(width+24)*zoom+'px';canvasViewport.style.height=(width*.7+24)*zoom+'px';zoomValue.textContent=Math.round(zoom*100)+'%';inspectTextBounds();}
+  function fitCanvas(){const width=studio.classList.contains('creator-compact')?640:1000,padding=getComputedStyle(area);const availableWidth=area.clientWidth-parseFloat(padding.paddingLeft)-parseFloat(padding.paddingRight),availableHeight=area.clientHeight-parseFloat(padding.paddingTop)-parseFloat(padding.paddingBottom)-32;setZoom(Math.min(1,availableWidth/(width+24),availableHeight/(width*.7+24)),false);}
+  const zoomOut=button('−',()=>setZoom(zoom-.1));zoomOut.setAttribute('aria-label','Уменьшить масштаб');zoomOut.title='Уменьшить масштаб';
+  const zoomIn=button('+',()=>setZoom(zoom+.1));zoomIn.setAttribute('aria-label','Увеличить масштаб');zoomIn.title='Увеличить масштаб';
+  const fit=button('Вписать',fitCanvas);fit.title='Вписать холст · Ctrl+0';
+  const focus=button('Только холст',()=>{studio.classList.toggle('creator-focus-mode');focus.setAttribute('aria-pressed',String(studio.classList.contains('creator-focus-mode')));requestAnimationFrame(fitCanvas);});focus.setAttribute('aria-pressed','false');
+  zoomTools.append(zoomOut,zoomValue,zoomIn,fit,focus);
+  statusBar.append(selectionReadout,docReadout,zoomTools);studio.append(statusBar);
+  const originalViewport=viewport.onclick;viewport.onclick=()=>{originalViewport();requestAnimationFrame(fitCanvas);};
+  const symbols={add:'M12 4v16 M4 12h16',text:'M4 5h16 M12 5v15 M8 20h8',image:'M3 4h18v16H3z M3 16l6-6 5 5 3-3 4 4 M16 7h.1',button:'M3 7h18v10H3z M8 12h8',shape:'M4 4h16v16H4z',page:'M6 2h9l4 4v16H6z M14 2v6h5',layers:'m12 3 10 5-10 5L2 8z M2 12l10 5 10-5 M2 16l10 5 10-5',grid:'M3 3h18v18H3z M9 3v18 M15 3v18 M3 9h18 M3 15h18',compact:'M7 2h10v20H7z M10 18h4'};
+  const toolButtons=[add,create,...rail.querySelectorAll('button')].filter((node,index,all)=>all.indexOf(node)===index);
+  const keys=['add','text','image','button','shape','page','layers','grid','compact'];
+  toolButtons.forEach((node,index)=>{const label=node.textContent;node.setAttribute('aria-label',label);node.title=label;const glyph=document.createElementNS('http://www.w3.org/2000/svg','svg');glyph.setAttribute('viewBox','0 0 24 24');glyph.setAttribute('aria-hidden','true');const path=document.createElementNS(glyph.namespaceURI,'path');path.setAttribute('d',symbols[keys[index]]||symbols.add);glyph.append(path);node.replaceChildren(glyph,make('span','creator-tool-label',label));});
+  function refreshReadout(){const item=currentItem();selectionReadout.textContent=item?item.name+' · X '+item.x+'% · Y '+item.y+'% · '+item.w+' × '+item.h+'%':'Страница · выбери элемент на холсте или в слоях';docReadout.textContent=studioDraft.length+' / 30 элементов';}
+  const professionalRender=renderStudio;
+  renderStudio=()=>{professionalRender();refreshReadout();list.querySelectorAll(':scope>button').forEach((row,index)=>{const item=[...studioDraft].reverse()[index];const textNode=[...row.childNodes].find(node=>node.nodeType===Node.TEXT_NODE);if(textNode){const name=make('span','layer-name',textNode.textContent);textNode.replaceWith(name);row.prepend(make('span','creator-layer-kind',item.type==='png'?'IMG':item.type==='video'?'VID':item.componentKind==='shape'?'BOX':item.componentKind==='button'?'BTN':'T'));}});};
+  document.addEventListener('keydown',event=>{if(event.isComposing||event.target.closest('input,textarea,select,[contenteditable]'))return;if(!(event.ctrlKey||event.metaKey))return;if(event.key==='0'){event.preventDefault();fitCanvas();}else if(event.key==='='||event.key==='+'){event.preventDefault();setZoom(zoom+.1);}else if(event.key==='-'){event.preventDefault();setZoom(zoom-.1);}});
+  let fitFrame=0;const observer=new ResizeObserver(()=>{cancelAnimationFrame(fitFrame);fitFrame=requestAnimationFrame(()=>{if(zoomValue.dataset.manual!=='true')fitCanvas();});});observer.observe(area);
+  for(const node of [zoomIn,zoomOut])node.addEventListener('click',()=>zoomValue.dataset.manual='true');fit.addEventListener('click',()=>zoomValue.dataset.manual='false');
+  const dockGrip=make('div','creator-dock-grip');dockGrip.tabIndex=0;dockGrip.setAttribute('role','separator');dockGrip.setAttribute('aria-orientation','vertical');dockGrip.setAttribute('aria-label','Ширина панели свойств');dockGrip.setAttribute('aria-valuemin','230');dockGrip.setAttribute('aria-valuemax','430');dockGrip.setAttribute('aria-valuenow','310');dock.prepend(dockGrip);const dockObserver=new ResizeObserver(()=>{const width=Math.round(dock.getBoundingClientRect().width);if(width>=230)dockGrip.setAttribute('aria-valuenow',String(width));});dockObserver.observe(dock);
+  function resizeDock(value){const width=Math.round(Math.max(230,Math.min(430,value)));studio.style.setProperty('--inspector-width',width+'px');dockGrip.setAttribute('aria-valuenow',String(width));}
+  dockGrip.addEventListener('pointerdown',event=>{event.preventDefault();const initial=dock.getBoundingClientRect().width,start=event.clientX;dockGrip.setPointerCapture(event.pointerId);const move=e=>resizeDock(initial+start-e.clientX);const done=()=>{dockGrip.removeEventListener('pointermove',move);dockGrip.removeEventListener('pointerup',done);dockGrip.removeEventListener('pointercancel',done);};dockGrip.addEventListener('pointermove',move);dockGrip.addEventListener('pointerup',done);dockGrip.addEventListener('pointercancel',done);});
+  dockGrip.addEventListener('keydown',event=>{if(event.key.startsWith('Arrow')||['Home','End','Delete','Backspace'].includes(event.key))event.stopPropagation();if(!['ArrowLeft','ArrowRight','Home'].includes(event.key))return;event.preventDefault();resizeDock(event.key==='Home'?310:Number(dockGrip.getAttribute('aria-valuenow'))+(event.key==='ArrowLeft'?10:-10));});dockGrip.ondblclick=()=>resizeDock(310);
+  const resetView=button('Сброс',()=>{resizeDock(310);studio.classList.remove('creator-focus-mode','creator-compact');focus.setAttribute('aria-pressed','false');viewport.setAttribute('aria-pressed','false');showBottom('layers');requestAnimationFrame(fitCanvas);});resetView.title='Сбросить расположение и масштаб панелей';zoomTools.append(resetView);
+  refreshReadout();requestAnimationFrame(fitCanvas);
+  window.NexusStudioUI=Object.freeze({openPicker,showBottom,fitCanvas,setZoom});
 })();

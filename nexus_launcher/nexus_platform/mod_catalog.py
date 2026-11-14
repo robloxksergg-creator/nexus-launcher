@@ -5,7 +5,7 @@ from dataclasses import replace
 from PySide6.QtCore import QObject, Signal, Slot, Qt, QTimer, QSize
 from PySide6.QtGui import QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QSizePolicy, QCheckBox,
     QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QTabWidget, QScrollArea, QProgressBar,
 )
 
@@ -16,6 +16,8 @@ from .catalog_controls import NexusButton, FlowLayout
 from .artwork import landscape
 from .mod_profile import ModRow, ProjectBody
 from .content_state import ContentState
+from .workspace_visuals import workspace_style, reveal
+from .theme_tokens import WORKSPACE
 from .mod_media import CACHE, safe_image, fetch_media, decode_image, GalleryImage
 
 
@@ -31,6 +33,8 @@ class CatalogBridge(QObject):
 class ModCatalog(QWidget):
     back_requested = Signal()
     install_requested = Signal(str, str)
+    batch_install_requested = Signal(str, object)
+    version_install_requested = Signal(str, str, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -67,12 +71,29 @@ class ModCatalog(QWidget):
         self.detail_deadline.setSingleShot(True)
         self.detail_deadline.timeout.connect(self._detail_timeout)
         self.install_busy = False
+        self.install_target = None
+        self.install_phase = 'resolve'
+        self.install_projects = set()
+        self.install_queue = []
+        self.checked_projects = set()
         self.project_hit = {}
-        root = QVBoxLayout(self)
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        bounded = QWidget()
+        bounded.setMaximumWidth(WORKSPACE['width'])
+        bounded.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        outer.addStretch(1)
+        outer.addWidget(bounded, 100)
+        outer.addStretch(1)
+        root = QVBoxLayout(bounded)
         root.setContentsMargins(20, 20, 20, 20)
+        root.setSpacing(16)
+        self.setObjectName('modWorkspace')
         header = QFrame()
         header.setObjectName("modSearchHeader")
         head = QVBoxLayout(header)
+        head.setContentsMargins(16, 12, 16, 12)
+        head.setSpacing(8)
         nav = QHBoxLayout()
         back = NexusButton("Назад к сборке")
         back.clicked.connect(self.back_requested)
@@ -101,8 +122,8 @@ class ModCatalog(QWidget):
         filter_row.addWidget(self.filters_button)
         self.status = QLabel('Выберите сборку')
         self.status.setWordWrap(True)
-        head.addWidget(self.status)
-        filter_row.addStretch(1)
+        self.status.setObjectName("muted")
+        filter_row.addWidget(self.status, 1)
         filter_row.addWidget(QLabel('Сортировка'))
         self.sort = self._combo('Сортировка', [(label, value) for value, label in SORTS.items()])
         self.sort.currentIndexChanged.connect(self._sort_changed)
@@ -141,7 +162,7 @@ class ModCatalog(QWidget):
         profile_layout = QVBoxLayout(self.profile_page)
         profile_layout.setContentsMargins(0, 0, 0, 0)
         self.return_results = QPushButton('← Назад к результатам')
-        self.return_results.clicked.connect(self._close_project)
+        self.return_results.clicked.connect(self._return_from_profile)
         profile_layout.addWidget(self.return_results, 0, Qt.AlignmentFlag.AlignLeft)
         profile_header = QFrame()
         profile_header.setObjectName('modProfileHeader')
@@ -174,7 +195,7 @@ class ModCatalog(QWidget):
         identity.addLayout(titles, 1)
         self.profile_install = QPushButton('Установить')
         self.profile_install.setObjectName('primaryAction')
-        self.profile_install.clicked.connect(self._install_selected)
+        self.profile_install.clicked.connect(self._install_profile)
         identity.addWidget(self.profile_install, 0, Qt.AlignmentFlag.AlignTop)
         profile_layout.addWidget(profile_header)
         self.project_tabs = QTabWidget()
@@ -191,7 +212,8 @@ class ModCatalog(QWidget):
         self.gallery.setWidget(self.gallery_content)
         self.gallery_labels = []
         self.project_tabs.addTab(self.gallery, 'Галерея')
-        self.versions = ProjectBody()
+        from .mod_versions_view import ModVersionsView
+        self.versions = ModVersionsView()
         self.project_tabs.addTab(self.versions, 'Версии')
         profile_layout.addWidget(self.project_tabs, 1)
         self.profile_page.hide()
@@ -206,11 +228,20 @@ class ModCatalog(QWidget):
         self.install.clicked.connect(self._install_selected)
         footer.addWidget(self.previous)
         footer.addWidget(self.next)
+        self.batch_clear = QPushButton('Снять выделение')
+        self.batch_clear.clicked.connect(self._clear_checked)
+        footer.addWidget(self.batch_clear)
         footer.addStretch()
+        self.batch_install = QPushButton('Скачать выбранные · 0')
+        self.batch_install.setObjectName('primaryAction')
+        self.batch_install.clicked.connect(self._install_checked)
+        self.batch_install.setEnabled(False)
+        footer.addWidget(self.batch_install)
         footer.addWidget(self.install)
+        self.install.hide()  # Row/profile actions own single installs; footer owns batch consent.
         root.addLayout(footer)
         from .presentation_style import stylesheet
-        self.setStyleSheet(stylesheet())
+        self.setStyleSheet(stylesheet() + workspace_style())
         self._invalidate()
 
     @staticmethod
@@ -224,9 +255,12 @@ class ModCatalog(QWidget):
         return combo
 
     def open_for(self, instance):
+        if self.instance is None or self.instance.id != instance.id:
+            self.checked_projects.clear()
         if self.instance:
             self._instance_searches[self.instance.id] = (self.filter_state, self.query.text(), self.offset)
         self.instance = instance
+        self.checked_projects.difference_update(mod.project_id for mod in instance.installed_mods)
         state, query, offset = self._instance_searches.get(instance.id, (ModrinthFilterState.for_instance(instance), '', 0))
         self.filter_state = state
         self.query.blockSignals(True)
@@ -395,6 +429,11 @@ class ModCatalog(QWidget):
             self.results.addItem(row)
             widget = ModRow(hit, self.instance, lambda _=False, item=row: self._open_project(item),
                             lambda _=False, item=row: self._install_row(item), context=self._hit_context(hit))
+            check=QCheckBox();check.setAccessibleName('Выбрать мод '+hit['title'])
+            check.setChecked(hit['project_id'] in self.checked_projects)
+            check.toggled.connect(lambda checked, key=hit['project_id']:self._check_project(key,checked))
+            widget.layout().insertWidget(0,check)
+            widget.batch_check=check
             row.setSizeHint(QSize(0, 132))
             self.results.setItemWidget(row, widget)
             url = hit.get('icon_url')
@@ -408,6 +447,7 @@ class ModCatalog(QWidget):
             f"{self.total:,} проектов · Показано {self.offset + 1}–{self.offset + len(hits)}".replace(",", " ")
             if hits else "Совместимых модов не найдено. Измените поиск или категорию."
         )
+        reveal(self.results)
         self._selection_changed(self.results.currentRow())
         self.previous.setEnabled(self.offset > 0)
         self.next.setEnabled(self.offset + len(hits) < self.total and bool(hits))
@@ -468,16 +508,24 @@ class ModCatalog(QWidget):
         if not image.isNull():
             self.profile_icon.setPixmap(QPixmap.fromImage(image))
 
-    def _open_project(self, item):
+    def _open_project(self, item, *, origin='catalog'):
         if self.instance is None:
             return
+        # A late search response must not replace the list behind an open profile.
+        self.deadline.stop()
+        self.generation += 1
+        if self.pending:
+            self.pending.cancel()
+        self._profile_origin=origin
+        self.return_results.setText('← Назад к модам сборки' if origin=='installed' else '← Назад к результатам')
         self.catalog_state.hide()
         self.detail_generation += 1
         token = self.detail_generation
         project_id = item.data(Qt.ItemDataRole.UserRole)
         instance = self.instance
         self.project_hit = item.data(Qt.ItemDataRole.UserRole + 1) or {}
-        self.results.setCurrentItem(item)
+        if item.listWidget() is self.results:
+            self.results.setCurrentItem(item)
         self.project_title.setText(item.text().split('\n')[0])
         self.project_author.setText('от ' + self.project_hit['author'] if self.project_hit.get('author') else '')
         self.project_summary.setText('Загрузка страницы мода…')
@@ -517,6 +565,7 @@ class ModCatalog(QWidget):
             except RuntimeError:
                 pass
         self.pool.submit(work)
+        self._selection_changed(self.results.currentRow())
 
     @Slot(int, object, str)
     def _project_received(self, token, payload, error):
@@ -539,10 +588,13 @@ class ModCatalog(QWidget):
         self.detail.setMarkdown(payload.get('body') or 'Описание пока не опубликовано.')
         self.detail.verticalScrollBar().setValue(0)
         versions = payload.get('_compatible_versions', [])
-        self.versions.setPlainText('\n\n'.join(
-            f'{v.get("name", v.get("version_number", ""))}\n{v.get("date_published", "")[:10]} · '
-            f'{", ".join(v.get("loaders", []))} · {", ".join(v.get("game_versions", []))}' for v in versions)
-            or ('Не удалось загрузить версии. Откройте страницу повторно.' if payload.get('_versions_error') else 'Совместимых версий нет.'))
+        if payload.get('_versions_error'):
+            self.versions.setPlainText('Не удалось загрузить версии. Откройте страницу повторно.')
+        else:
+            project_id=self.project_hit.get('project_id','')
+            instance_id=self.instance.id if self.instance else ''
+            self.versions.set_versions(versions,[m.version_id for m in self.instance.installed_mods] if self.instance else [],lambda version_id:self.version_install_requested.emit(instance_id,project_id,version_id))
+            self.versions.set_busy(self.install_busy)
         self.changelog.setMarkdown((versions[0].get('changelog') if versions else '') or 'Список изменений пока недоступен.')
         while self.gallery_layout.count():
             widget = self.gallery_layout.takeAt(0).widget()
@@ -585,6 +637,11 @@ class ModCatalog(QWidget):
             return
         self.gallery_labels[index].set_image(decode_image(data))
 
+    def _return_from_profile(self):
+        installed=getattr(self,'_profile_origin','catalog')=='installed'
+        self._close_project()
+        if installed:self.back_requested.emit()
+
     def _close_project(self):
         self.detail_deadline.stop()
         for future in self._project_media_futures:
@@ -597,8 +654,18 @@ class ModCatalog(QWidget):
         self.search_header.show()
         self.previous.show()
         self.next.show()
-        self.install.show()
+        self.install.hide()
         self.results.show()
+
+    def open_installed(self,instance,project_id,title):
+        self.leave()
+        if self.instance is None or self.instance.id!=instance.id:self.checked_projects.clear()
+        self.instance=instance
+        item=next((self.results.item(i) for i in range(self.results.count()) if self.results.item(i).data(Qt.UserRole)==project_id),None)
+        if item is None:
+            item=QListWidgetItem(title);item.setData(Qt.UserRole,project_id)
+            item.setData(Qt.UserRole+1,{'project_id':project_id,'title':title,'versions':[instance.minecraft_version],'loaders':[instance.loader]})
+        self._open_project(item,origin='installed')
 
     def _detail_timeout(self):
         self.detail_generation += 1
@@ -636,22 +703,69 @@ class ModCatalog(QWidget):
 
     def _selection_changed(self, row):
         item = self.results.item(row) if row >= 0 else None
-        allowed = not self.install_busy and item is not None and self._compatible_hit(item.data(Qt.ItemDataRole.UserRole + 1) or {})
+        installed = {mod.project_id for mod in self.instance.installed_mods} if self.instance else set()
+        selected_installed = item is not None and item.data(Qt.ItemDataRole.UserRole) in installed
+        selected_id = item.data(Qt.ItemDataRole.UserRole) if item else ''
+        active_selected = self.install_busy and self.instance and self.install_target == self.instance.id and selected_id in self.install_projects
+        allowed = item is not None and not selected_installed and not active_selected and self._compatible_hit(item.data(Qt.ItemDataRole.UserRole + 1) or {})
         self.install.setEnabled(allowed)
-        self.profile_install.setEnabled(allowed)
+        profile_id=self.project_hit.get('project_id','')
+        profile_active=self.install_busy and self.instance and self.install_target==self.instance.id and profile_id in self.install_projects
+        self.profile_install.setEnabled(bool(profile_id) and profile_id not in installed and not profile_active and self._compatible_hit(self.project_hit))
+        selected_id = item.data(Qt.ItemDataRole.UserRole) if item else ''
+        self.install.setText(self._install_label(selected_id, installed) if self.install_busy or selected_installed else 'Установить выбранный мод')
+        self.profile_install.setText(self._install_label(profile_id, installed))
         for index in range(self.results.count()):
             item = self.results.item(index)
             widget = self.results.itemWidget(item)
             if isinstance(widget, ModRow):
                 compatible = self._compatible_hit(item.data(Qt.ItemDataRole.UserRole + 1) or {})
-                widget.install.setEnabled(not self.install_busy and compatible)
-                widget.install.setToolTip('' if compatible else 'Не совместим с выбранной сборкой')
+                present = item.data(Qt.ItemDataRole.UserRole) in installed
+                active_row = self.install_busy and self.instance and self.install_target == self.instance.id and item.data(Qt.ItemDataRole.UserRole) in self.install_projects
+                widget.install.setEnabled(compatible and not present and not active_row)
+                widget.install.setText(self._install_label(item.data(Qt.ItemDataRole.UserRole), installed))
+                widget.install.setToolTip('Уже установлен в этой сборке' if present else '' if compatible else 'Не совместим с выбранной сборкой')
+                if hasattr(widget,'batch_check'):
+                    widget.batch_check.setEnabled(compatible and not present and not self.install_busy)
         self.install.setToolTip('' if allowed else 'Выбери мод, совместимый с версией и загрузчиком сборки')
+        if hasattr(self,'batch_install'):
+            self.batch_install.setText('Скачать выбранные · '+str(len(self.checked_projects)))
+            self.batch_install.setEnabled(bool(self.checked_projects) and not self.install_busy)
+            self.batch_clear.setEnabled(bool(self.checked_projects) and not self.install_busy)
+
+    def _check_project(self, project_id, checked):
+        if checked:
+            if len(self.checked_projects)>=20 and project_id not in self.checked_projects:
+                self.status.setText('Можно выбрать до 20 модов за один раз.')
+            else:
+                self.checked_projects.add(project_id)
+        else:
+            self.checked_projects.discard(project_id)
+        for index in range(self.results.count()):
+            item=self.results.item(index);widget=self.results.itemWidget(item)
+            if hasattr(widget,'batch_check'):
+                widget.batch_check.blockSignals(True)
+                widget.batch_check.setChecked(item.data(Qt.UserRole) in self.checked_projects)
+                widget.batch_check.blockSignals(False)
+        self._selection_changed(self.results.currentRow())
+
+    def _clear_checked(self):
+        self.checked_projects.clear()
+        self._check_project('',False)
+
+    def _install_checked(self):
+        if self.instance and self.checked_projects and not self.install_busy:
+            self.batch_install_requested.emit(self.instance.id,sorted(self.checked_projects))
 
     def _install_selected(self):
         item = self.results.currentItem()
         if item and self.instance is not None and self.install.isEnabled():
             self.install_requested.emit(self.instance.id, item.data(Qt.ItemDataRole.UserRole))
+
+    def _install_profile(self):
+        project_id=self.project_hit.get('project_id','')
+        if self.instance and project_id and self.profile_install.isEnabled():
+            self.install_requested.emit(self.instance.id,project_id)
 
     def _install_row(self, item):
         self.results.setCurrentItem(item)
@@ -663,11 +777,39 @@ class ModCatalog(QWidget):
         self.sort.hidePopup()
         self._invalidate()
 
-    def set_install_busy(self, busy):
+    def _install_label(self, project_id, installed):
+        active = self.install_busy and self.instance and self.install_target == self.instance.id
+        if active and project_id in self.install_projects:
+            return {'resolve':'Проверяем…', 'confirm':'Ждёт подтверждения', 'download':'Скачивается…'}[self.install_phase]
+        if project_id in installed:
+            return 'Установлен'
+        key = (self.instance.id, project_id) if self.instance else None
+        if key in self.install_queue:
+            return 'В очереди · ' + str(self.install_queue.index(key)+1)
+        return 'Установить'
+
+    def set_install_busy(self, busy, *, instance_id=None, project_id=None, phase='resolve', projects=None):
         self.install_busy = busy
-        self.install.setText("Подготовка / установка…" if busy else "Установить выбранный мод")
-        self.profile_install.setText('Установка…' if busy else 'Установить')
+        self.versions.set_busy(busy)
+        self.install_phase = phase
+        if instance_id is not None:
+            self.install_target = instance_id
+        if project_id is not None:
+            self.install_projects = {project_id}
+        if projects is not None:
+            self.install_projects = set(projects)
+        if not busy:
+            self.install_target = None
+            self.install_projects.clear()
         self._selection_changed(self.results.currentRow())
+
+    def refresh_installed(self, instance):
+        if self.instance and self.instance.id == instance.id:
+            self.instance = instance
+            self.versions.set_installed(m.version_id for m in instance.installed_mods)
+            self.checked_projects.difference_update(mod.project_id for mod in instance.installed_mods)
+            self._check_project('',False)
+            self._selection_changed(self.results.currentRow())
 
     def shutdown(self):
         self.leave()

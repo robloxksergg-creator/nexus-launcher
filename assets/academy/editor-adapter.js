@@ -4,7 +4,7 @@
   const emit=(type,data={})=>console.info('NEXUS_CREATOR_EVENT:'+JSON.stringify({type,...data}));
   const clone=value=>JSON.parse(JSON.stringify(value));
   let previous={components:[],selected:''}, loading=false, model=null, highlighted=null;
-  const snapshot=()=>({components:clone(studioDraft),selected:selectedID||''});
+  const snapshot=()=>({components:clone(studioDraft),selected:selectedID||'',...(window.NexusPlacementUI?{placements:window.NexusPlacementUI.snapshot()}: {})});
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const command=(action,data={})=>emit('learning.'+action,data);
   const savedRender=renderStudio;
@@ -118,17 +118,17 @@
   const academy=document.createElement('button');academy.className='outline';academy.textContent='Academy';academy.onclick=()=>command('academy');toolbar.append(academy);
   const helpButton=document.createElement('button');helpButton.className='outline';helpButton.textContent='?';helpButton.setAttribute('aria-label','Справка о холсте');helpButton.onclick=()=>command('help');toolbar.append(helpButton);
   studio.querySelector('#studio-save').onclick=()=>{if(validStudio(studioDraft))emit('project.save_requested',{snapshot:snapshot()});else errorStudio('Проверь действия и ссылки панелей.');};
-  studio.querySelector('#studio-cancel').onclick=()=>{help.hidden=false;renderCanvas(help,studioDraft,false);const close=document.createElement('button');close.textContent=model?.ui.editor||'Studio';close.dataset.learning='close-help';help.prepend(close);emit('preview.opened',{snapshot:snapshot()});};
+  studio.querySelector('#studio-cancel').onclick=()=>{help.replaceChildren();help.classList.add('academy-page-preview');help.hidden=false;const header=document.createElement('header');const title=document.createElement('strong');title.textContent='Предпросмотр страницы';const close=document.createElement('button');close.textContent='Вернуться в редактор';close.dataset.learning='close-help';header.append(title,close);const scene=document.createElement('div');scene.className='academy-preview-scene';renderCanvas(scene,clone(studioDraft).map(item=>({...item,action:'none'})),false);const note=document.createElement('p');note.textContent='Вид страницы · действия отключены в предпросмотре';help.append(header,scene,note);emit('preview.opened',{snapshot:snapshot()});};
   const baseTemplate=clone(studioSaved);
   window.NexusCreator=Object.freeze({
-    load(document){loading=true;studioSaved=document?clone(document.components):[{id:'practice-background',name:'Учебный баннер',type:'png',src:'/gearmorph-official.png',x:0,y:0,w:100,h:45,action:'none',locked:true,group:''}];studioDraft=clone(studioSaved);studioCounter=Math.max(0,...studioDraft.map(x=>Number(x.id.replace('element',''))||0));selectedID=document?.selected||studioDraft.at(-1)?.id;multiSelection.clear();studio.hidden=false;studioEditing=true;app.inert=true;activeToolCategory='create';renderStudio();loading=false;previous=snapshot();emit('editor.ready',{snapshot:previous});},
+    load(document){loading=true;window.NexusPlacementUI?.load(document?.placements);studioSaved=document?clone(document.components):[{id:'practice-background',name:'Учебный баннер',type:'png',src:'/gearmorph-official.png',x:0,y:0,w:100,h:45,action:'none',locked:true,group:''}];studioDraft=clone(studioSaved);studioCounter=Math.max(0,...studioDraft.map(x=>Number(x.id.replace('element',''))||0));selectedID=document?.selected||studioDraft.at(-1)?.id;multiSelection.clear();studio.hidden=false;studioEditing=true;app.inert=true;activeToolCategory='create';renderStudio();loading=false;previous=snapshot();emit('editor.ready',{snapshot:previous});},
     loadTemplate(){this.load({components:baseTemplate});emit('document.changed',{snapshot:snapshot()});},
     learning(value){model=value;studio.querySelector('#studio-save').textContent=model.ui.save;helpButton.setAttribute('aria-label',model.ui.help);studio.querySelector('#studio-cancel').textContent=model.ui.preview;showLearning();if(!panel.hidden)renderAcademy();},
     academy(){if(!model)return;renderAcademy();panel.hidden=false;panel.querySelector('input').focus();},
     onboarding(){if(!model)return;const u=model.ui;welcome.innerHTML=`<p class="academy-eyebrow">NEXUS CREATOR</p><h2>${esc(u.welcome)}</h2>${['guided','template','explore','advanced'].map(value=>`<button data-learning="welcome-choice" data-value="${value}">${esc(u[value])}</button>`).join('')}`;welcome.hidden=false;welcome.focus();},
     closeWelcome(){welcome.hidden=true;},
-    help(text){help.innerHTML=`<h3>${esc(model.ui.help)}</h3><p>${esc(text)}</p>${button('close-help',model.ui.back)}`;help.hidden=false;help.focus();},
-    saved(){studio.querySelector('#studio-status').textContent=model?.ui.saved||'Saved';},
+    help(text){help.classList.remove('academy-page-preview');help.innerHTML=`<h3>${esc(model.ui.help)}</h3><p>${esc(text)}</p>${button('close-help',model.ui.back)}`;help.hidden=false;help.focus();},
+    saved(){window.NexusPlacementUI?.saved();studio.querySelector('#studio-status').textContent=model?.ui.saved||'Saved';},
     resolve,
     snapshot,
   });

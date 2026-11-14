@@ -9,10 +9,15 @@ TYPE = {"display": 56, "heading": 36, "section": 24, "body": 15,
 RADIUS = {"control": 8, "surface": 16, "hero": 20}
 MOTION = {"fast": 160, "normal": 220, "hero": 300}
 LAYOUT = {"sidebar": 232, "collapsed": 72, "content": 1760, "compact": 1280, "wide": 1920}
+# Owner-selected completion palette, reused by the build/installation workspaces.
+WORKSPACE = {"background": "#07111e", "surface": "#101e30", "border": "#294158",
+             "accent": "#83c9ff", "primaryTop": "#85ceff", "primaryBottom": "#4d94ef",
+             "width": 1240, "fieldWidth": 660}
 
 
 def browser_tokens():
     values = {**TOKENS, **{f"type-{key}": f"{value}px" for key, value in TYPE.items()},
+              **{f"workspace-{key}": f"{value}px" if isinstance(value, int) else value for key, value in WORKSPACE.items()},
               **{f"space-{value}": f"{value}px" for value in SPACING},
               **{f"radius-{key}": f"{value}px" for key, value in RADIUS.items()},
               **{f"motion-{key}": f"{value}ms" for key, value in MOTION.items()},

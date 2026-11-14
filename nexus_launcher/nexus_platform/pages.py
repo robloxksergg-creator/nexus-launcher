@@ -927,6 +927,7 @@ class SettingsPage(QWidget):
 
     @staticmethod
     def _set_lines(panel: QWidget, lines: list[tuple[str, str]]) -> None:
+        from html import escape
         old = panel.findChildren(QLabel, "settingLine")
         for label in old:
             panel.layout().removeWidget(label)
@@ -934,7 +935,8 @@ class SettingsPage(QWidget):
             label.deleteLater()
         insert_at = 3
         for name, value in lines:
-            label = QLabel(f"{name}\n{value}")
+            label = QLabel(f'<span style="font-size:11px;color:#91afca">{escape(str(name))}</span><br><span style="font-size:15px;color:#e1effc">{escape(str(value))}</span>')
+            label.setTextFormat(Qt.RichText)
             label.setObjectName("settingLine")
             label.setWordWrap(True)
             panel.layout().insertWidget(insert_at, label)

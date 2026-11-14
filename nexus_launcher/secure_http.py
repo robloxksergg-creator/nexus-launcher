@@ -2,6 +2,7 @@
 
 import urllib.parse
 import urllib.request
+import ssl
 
 
 def origin(url: str) -> tuple[str, str, int]:
@@ -48,7 +49,17 @@ def open_https(request, timeout, *, allowed_hosts=None):
         allowed = {initial}
     policy = OriginRedirects(allowed)
     policy.validate(request.full_url)
-    response = urllib.request.build_opener(policy).open(request, timeout=timeout)
+    handlers = [policy]
+    # The Modrinth CDN chain may be absent from Windows' installed CA roots.
+    # Supplement system roots with the packaged Mozilla bundle, scoped to
+    # Modrinth-only transports. Keep hostname verification and CERT_REQUIRED.
+    modrinth_origins = {('https', host, 443) for host in ('api.modrinth.com', 'cdn.modrinth.com')}
+    if initial in modrinth_origins and allowed <= modrinth_origins:
+        import certifi
+        context = ssl.create_default_context()
+        context.load_verify_locations(cafile=certifi.where())
+        handlers.append(urllib.request.HTTPSHandler(context=context))
+    response = urllib.request.build_opener(*handlers).open(request, timeout=timeout)
     try:
         policy.validate(response.geturl())
     except Exception:

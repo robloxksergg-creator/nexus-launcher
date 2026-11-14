@@ -1,19 +1,24 @@
 """Shared native empty/loading/error presentation with real next actions."""
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout
-
-from .artwork import ArtworkSurface
+from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout
 
 
-class ContentState(ArtworkSurface):
+class ContentState(QFrame):
     def __init__(self, title, description, action_label, callback, seed="content"):
         super().__init__()
-        self.set_artwork("", seed)
-        self.setMinimumHeight(220)
-        self.setMaximumHeight(260)
+        self.setObjectName('workspacePanel')
+        from .workspace_visuals import workspace_style
+        self.setStyleSheet(workspace_style())
+        self.setMinimumHeight(190)
+        self.setMaximumHeight(270)
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 24, 24, 24)
         root.setSpacing(12)
+        from .workspace_visuals import outline_icon
+        symbol = QLabel()
+        symbol.setPixmap(outline_icon(seed))
+        symbol.setFixedSize(40, 40)
+        root.addWidget(symbol)
         self.title = QLabel(title)
         self.title.setObjectName("cardTitle")
         self.title.setWordWrap(True)

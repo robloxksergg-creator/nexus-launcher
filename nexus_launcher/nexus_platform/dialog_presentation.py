@@ -14,6 +14,19 @@ def polish_creation(dialog):
     if dialog.property('nexusPolished'):
         return
     dialog.setProperty('nexusPolished', True)
+    if dialog.property('workspaceCreation'):
+        # The current constructor already owns the scrollable workspace. Retain
+        # its original fields/handlers rather than unpacking the legacy layout.
+        for field in dialog.findChildren(QLineEdit):
+            field.setClearButtonEnabled(True)
+        available = dialog.screen().availableGeometry()
+        dialog.setMaximumHeight(max(520, available.height() - 80))
+        dialog.resize(min(680, available.width()-60), min(740, dialog.maximumHeight()))
+        create = dialog.findChild(QPushButton, 'primaryAction')
+        if create:
+            create.setText('Создать сборку')
+            create.setDefault(True)
+        return
     dialog.setObjectName('createBuildDialog')
     dialog.setStyleSheet(stylesheet())
     root = dialog.layout()

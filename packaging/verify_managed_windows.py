@@ -42,7 +42,8 @@ def verify(initial_zip, initial_envelope, update_zip, update_envelope, root, rep
             self.children.append(child)
             return child
 
-    transport = GitHubPackageTransport('https://github.com/robloxksergg-creator/nexus-launcher/releases/download/updates-preview/portable-envelope.json')
+    from nexus_launcher import public_update_identity
+    transport = GitHubPackageTransport(public_update_identity.FEED)
     # Replace network I/O only in this acceptance harness; production transport
     # still validates the signed GitHub URL and archive size/hash before staging.
     def local_open(url):

@@ -8,6 +8,20 @@ from contextlib import nullcontext
 
 
 def main(*, readiness_callback=None):
+    from nexus_launcher.startup_trace import StartupTrace
+    trace = StartupTrace()
+    try:
+        return _main(readiness_callback=readiness_callback, trace=trace)
+    except Exception:
+        # This fallback also works when WebEngine never created a window.
+        trace.fail('startup-exception')
+        raise
+    finally:
+        trace.close()
+
+
+def _main(*, readiness_callback=None, trace):
+    trace.stage('environment')
     if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
         os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
     storage = os.environ.get("NEXUS_PORTABLE_DATA")
@@ -16,9 +30,11 @@ def main(*, readiness_callback=None):
         os.environ["APPDATA"] = sandbox
         os.environ["NEXUS_PRIVATE_UI"] = "1"
         os.environ["NEXUS_DISABLE_SELF_UPDATE"] = "1"
+        trace.stage('qt-import')
         from PySide6.QtCore import QTimer
         from PySide6.QtGui import QIcon
-        from PySide6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication, QProgressDialog
+        trace.stage('services-import')
         from nexus_launcher.modern_main import Launcher, WINDOWS_APP_ID, resource
         from nexus_launcher.nexus_platform.next_shell import NexusLauncher
         from nexus_launcher.nexus_platform.prototype_host import PrototypeHost
@@ -31,21 +47,37 @@ def main(*, readiness_callback=None):
         if sys.platform == 'win32':
             import ctypes
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(WINDOWS_APP_ID)
+        trace.stage('qt-application')
         app = QApplication([])
         app.setApplicationName('NEXUS Launcher')
         app.setApplicationDisplayName('NEXUS Launcher')
         app.setDesktopFileName(WINDOWS_APP_ID)
         app.setWindowIcon(QIcon(str(resource('icon.ico' if sys.platform == 'win32' else 'icon.png'))))
+        loading = QProgressDialog('Подготавливаем NEXUS…', '', 0, 0)
+        loading.setWindowTitle('NEXUS — запуск')
+        loading.setCancelButton(None)
+        loading.setMinimumDuration(0)
+        loading.setMinimumWidth(420)
+        loading.show()
+        app.processEvents()
+        trace.stage('services-create')
         services = NexusLauncher()
+        trace.stage('window-create')
         if os.environ.get("NEXUS_UI_2") == "1":
             from nexus_launcher.nexus_platform.design_bridge import DesignHost
             window = DesignHost(services)
         else:
             window = PrototypeHost(services)
         window.showMaximized()
-        if readiness_callback is not None:
-            from nexus_launcher.public_readiness import PublicReadinessProbe
-            window.bootstrap_readiness = PublicReadinessProbe(window, services, readiness_callback)
+        loading.close()
+        trace.stage('renderer-wait')
+        from nexus_launcher.public_readiness import PublicReadinessProbe
+        def responsive():
+            trace.ready()
+            if readiness_callback is not None:
+                readiness_callback()
+        window.bootstrap_readiness = PublicReadinessProbe(window, services, responsive)
+        window.view.renderProcessTerminated.connect(lambda *_: trace.fail('renderer-terminated'))
         if "--self-test-report" in sys.argv:
             window.showNormal()
             window.resize(1366, 900)

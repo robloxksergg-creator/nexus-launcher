@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QPushButton
 
 @pytest.fixture
 def candidate(tmp_path, monkeypatch):
+    monkeypatch.setattr('nexus_launcher.nexus_platform.installed_mod_media.InstalledModMedia.request',lambda *a:None)
     import nexus_launcher.modern_main as modern_main
     import nexus_launcher.nexus_platform.window as platform_window
     from nexus_launcher.nexus_platform.next_shell import NexusLauncher
@@ -60,7 +61,8 @@ def test_settings_workspace_preserves_controls(candidate, size):
     app.processEvents()
     workspace = window.settings_scroll
     assert workspace.width() > 900
-    assert workspace.content.width() > workspace.width() / 2
+    assert workspace.content.width() > workspace.desk.width() / 2
+    assert workspace.desk.width() <= 1240
     assert window.settings_page.panels.isVisible()
     workspace.search.setText("Java")
     app.processEvents()

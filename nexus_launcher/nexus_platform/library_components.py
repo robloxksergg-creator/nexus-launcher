@@ -1,6 +1,6 @@
 """Reusable visual library primitives; operations remain in InstancePage."""
 from PySide6.QtCore import QDateTime, QRect, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QLinearGradient
 from PySide6.QtWidgets import QListWidget, QPushButton, QStyledItemDelegate
 from nexus_launcher.user_instances import UserInstance
 
@@ -52,7 +52,7 @@ class ArtworkCard(QPushButton):
         super().__init__(parent)
         self.instance = instance
         self.worlds = worlds
-        self.art = load_artwork(instance.banner or instance.icon, instance.id, QSize(600, 300))
+        self.art = load_artwork(instance.banner, instance.id, QSize(600, 300)) if instance.banner else None
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAccessibleName(f"Открыть {instance.name}, Minecraft {instance.minecraft_version}, {instance.loader}, {len(instance.installed_mods)} модов")
         self.setToolTip(f'{instance.name}\nMinecraft {instance.minecraft_version} · {instance.loader.title()}\nПамять: {instance.memory_mb / 1024:g} ГБ')
@@ -79,9 +79,19 @@ class ArtworkCard(QPushButton):
         painter.setClipPath(path)
         painter.fillRect(bounds, QColor(TOKENS["hover"] if self.underMouse() else TOKENS["surface"]))
         art_height = 136
-        image = self.art.scaled(QSize(self.width(), art_height), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
-        painter.drawPixmap(QRect(0, 0, self.width(), art_height), image, QRect((image.width() - self.width()) // 2,
-                          (image.height() - art_height) // 2, self.width(), art_height))
+        if self.art is not None:
+            image = self.art.scaled(QSize(self.width(), art_height), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+            painter.drawPixmap(QRect(0, 0, self.width(), art_height), image, QRect((image.width() - self.width()) // 2,
+                              (image.height() - art_height) // 2, self.width(), art_height))
+        else:
+            wash = QLinearGradient(0, 0, self.width(), art_height)
+            wash.setColorAt(0, QColor('#1a4268'))
+            wash.setColorAt(1, QColor('#0a1728'))
+            painter.fillRect(QRect(0, 0, self.width(), art_height), wash)
+            painter.setPen(QColor('#7ebff1'))
+            font = QFont('Bahnschrift');font.setPixelSize(65);font.setBold(True)
+            painter.setFont(font)
+            painter.drawText(QRect(24, 22, self.width()-48, 90), Qt.AlignLeft | Qt.AlignVCenter, self.instance.name[:2].upper())
         painter.setPen(QColor(TOKENS["text"]))
         font = QFont("Bahnschrift")
         font.setPixelSize(TYPE["section"])
@@ -139,7 +149,7 @@ class ArtworkGrid(QListWidget):
         super().resizeEvent(event)
         available = max(280, self.viewport().width() - 24)
         columns = max(1, available // 328)
-        width = (available - (columns - 1) * 24) // columns
+        width = min(360, (available - (columns - 1) * 24) // columns)
         self.setGridSize(QSize(width + 24, 340))
         for index in range(self.count()):
             self.item(index).setSizeHint(QSize(width, 316))
