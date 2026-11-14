@@ -61,7 +61,9 @@ def test_zoom_dock_focus_and_compact_layout_preserve_document(tmp_path):
         assert js(app, workspace.page, "getComputedStyle(document.querySelector('.creator-dock')).display") != 'none'
         for width, height in ((1440,900),(1000,740),(720,640)):
             workspace.resize(width,height)
-            QTest.qWait(80)
+            # Chromium applies the native resize asynchronously on loaded runners.
+            wait(app, lambda: json.loads(js(app, workspace.page, 'JSON.stringify([innerWidth,innerHeight])'))
+                 == [workspace.view.width(), workspace.view.height()])
             js(app, workspace.page, 'NexusStudioUI.fitCanvas()')
             geometry = json.loads(js(app, workspace.page, "JSON.stringify({overflow:document.documentElement.scrollWidth>innerWidth,toolbar:document.querySelector('.canvas-toolbar').getBoundingClientRect().height,status:document.querySelector('.creator-statusbar').getBoundingClientRect().bottom,dock:document.querySelector('.creator-dock').getBoundingClientRect().right})"))
             assert not geometry['overflow']
